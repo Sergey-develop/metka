@@ -1,0 +1,61 @@
+<script setup lang="ts">
+import { onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import SplashScreen from '@/components/ui/SplashScreen.vue'
+import { useAuthStore } from '@/stores/auth'
+import { useClanStore } from '@/stores/clan'
+import { useCollectionStore } from '@/stores/collection'
+import { useMapStore } from '@/stores/map'
+import { useProfileStore } from '@/stores/profile'
+import { useQuestsStore } from '@/stores/quests'
+import { useScanStore } from '@/stores/scan'
+
+const auth = useAuthStore()
+const router = useRouter()
+const profile = useProfileStore()
+
+// brand splash while the stored session is restored (min. duration avoids a flash)
+const minSplashDone = ref(false)
+onMounted(() => setTimeout(() => (minSplashDone.value = true), 700))
+
+watch(
+  () => auth.userId,
+  (userId, previous) => {
+    if (userId && userId !== previous) void profile.load()
+    if (!userId && previous) {
+      // signed out or session expired: drop all per-user state
+      profile.reset()
+      useMapStore().reset()
+      useCollectionStore().reset()
+      useQuestsStore().reset()
+      useClanStore().reset()
+      useScanStore().reset()
+      void router.replace({ name: 'login' })
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  () => auth.recoveryMode,
+  (recovery) => {
+    if (recovery) void router.replace({ name: 'update-password' })
+  },
+)
+</script>
+
+<template>
+  <RouterView />
+  <Transition name="splash">
+    <SplashScreen v-if="auth.status === 'loading' || !minSplashDone" />
+  </Transition>
+</template>
+
+<style lang="scss">
+.splash-leave-active {
+  transition: opacity 0.35s var(--ease);
+}
+.splash-leave-to {
+  opacity: 0;
+}
+</style>

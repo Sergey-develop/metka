@@ -1,0 +1,179 @@
+:root {
+  /* sampled from the design mockups */
+  --c-bg: #f5f4f2;
+  --c-surface: #ffffff;
+  --c-surface-2: #f2f2f7;
+  --c-field: #eeeeef;
+  --c-text: #0b0b0c;
+  --c-text-2: #6e6e73;
+  --c-text-3: #a1a1a6;
+  --c-accent: #4db1fa;
+  --c-accent-strong: #1f8fe5;
+  --c-accent-soft: #eef8ff;
+  --c-accent-track: #d0e8ec;
+  --c-accent-contrast: #ffffff;
+  --c-brand-pink: #ff94de;
+  --c-map-bg: #f5f4f2;
+  --c-district: #f2f2f7;
+  --c-district-line: #d6daf0;
+  --c-district-label: #5a7ee8;
+  --c-district-selected: #9fd1f9;
+  --c-success: #1fa463;
+  --c-success-soft: #e3f6ec;
+  --c-danger: #e5484d;
+  --c-danger-soft: #fdecec;
+  --c-warning: #d98a00;
+  --c-warning-soft: #fff4dc;
+
+  --r-sm: 12px;
+  --r-md: 20px;
+  --r-lg: 28px;
+  --r-pill: 999px;
+  --shadow-card: 0 1px 2px rgb(17 19 23 / 3%), 0 4px 16px rgb(17 19 23 / 5%);
+  --font-dots: 'Doto', ui-monospace, monospace;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --nav-height: 84px;
+
+  --font: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+.card {
+  background: var(--c-surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.page {
+  min-height: 100%;
+  padding: calc(var(--safe-top) + 20px) 16px calc(var(--nav-height) + var(--safe-bottom) + 24px);
+}
+
+.page-title {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  label {
+    font-size: 13px;
+    color: var(--c-text-2);
+    padding-left: 4px;
+  }
+
+  input {
+    height: 52px;
+    border: 1.5px solid transparent;
+    border-radius: var(--r-pill);
+    background: var(--c-field);
+    padding: 0 16px;
+    outline: none;
+    transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
+
+    &:focus {
+      border-color: var(--c-accent);
+      background: var(--c-surface);
+    }
+  }
+}
+
+.notice {
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  font-size: 14px;
+
+  &--error {
+    background: var(--c-danger-soft);
+    color: #9f1d22;
+  }
+  &--info {
+    background: var(--c-accent-soft);
+    color: #134a9c;
+  }
+  &--success {
+    background: var(--c-success-soft);
+    color: #12663d;
+  }
+  &--warning {
+    background: var(--c-warning-soft);
+    color: #7a4d00;
+  }
+}
+
+.muted {
+  color: var(--c-text-2);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+.dots {
+  font-family: var(--font-dots);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
