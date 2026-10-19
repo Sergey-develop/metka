@@ -21,8 +21,6 @@ export type OutlinesState = 'idle' | 'loading' | 'ready' | 'error'
 /** nearby footprints are fetched for this radius and refetched after moving this far */
 const FETCH_RADIUS_M = 250
 const REFETCH_AFTER_M = 100
-/** a manual choice is dropped after walking this far from where it was made */
-const MANUAL_RELEASE_M = 40
 /** distance on the card only with a reasonably precise fix */
 const DISTANCE_MAX_ACCURACY_M = 20
 const RECOMPUTE_MS = 200
@@ -54,7 +52,6 @@ export const useArScanStore = defineStore('arScan', () => {
   let stopHeading: (() => void) | null = null
   let fetchController: AbortController | null = null
   let fetchedAt: GeoFix | null = null
-  let manualAt: GeoFix | null = null
   let lastCompute = 0
   let smooth: { x: number; y: number } | null = null
 
@@ -87,9 +84,14 @@ export const useArScanStore = defineStore('arScan', () => {
     if (next.id !== null) void useBuildingInfoStore().load(next.id)
   }
 
+  /**
+   * Picks the building in view. Once a card is open (detected or chosen) detection is held: the card
+   * stays put however the compass and GPS jitter, until the player closes it (close()).
+   */
   function recompute(force = false): void {
     const fix = position.value
     if (!fix || outlinesState.value !== 'ready') return
+    if (selection.value.id !== null) return
     const now = Date.now()
     if (!force && now - lastCompute < RECOMPUTE_MS) return
     lastCompute = now
@@ -131,10 +133,6 @@ export const useArScanStore = defineStore('arScan', () => {
   function onFix(fix: GeoFix): void {
     position.value = fix
     gps.value = 'ok'
-    if (manualAt && distanceMeters(manualAt, fix) > MANUAL_RELEASE_M) {
-      manualAt = null
-      setSelection(stabilizer.release())
-    }
     if (!fetchController && (!fetchedAt || distanceMeters(fetchedAt, fix) > REFETCH_AFTER_M)) void fetchOutlines(fix)
     recompute(true)
   }
@@ -229,13 +227,11 @@ export const useArScanStore = defineStore('arScan', () => {
   }
 
   function choose(id: number): void {
-    manualAt = position.value
     setSelection(stabilizer.choose(id))
   }
 
-  /** back to automatic detection */
-  function auto(): void {
-    manualAt = null
+  /** the player closed the card: detection resumes from scratch */
+  function close(): void {
     setSelection(stabilizer.release())
     recompute(true)
   }
@@ -263,7 +259,6 @@ export const useArScanStore = defineStore('arScan', () => {
     heading.value = null
     smooth = null
     match.value = null
-    manualAt = null
     stabilizer = new SelectionStabilizer()
     selection.value = { id: null, manual: false }
     if (outlinesState.value === 'loading') outlinesState.value = outlines.value.length ? 'ready' : 'idle'
@@ -289,6 +284,6 @@ export const useArScanStore = defineStore('arScan', () => {
     enableCompass,
     retryOutlines,
     choose,
-    auto,
+    close,
   }
 })

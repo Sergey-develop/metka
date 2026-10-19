@@ -152,7 +152,7 @@ describe('arScan store', () => {
     expect(store.distanceM).toBeNull()
   })
 
-  it('a manual choice holds until the player walks away or switches back to auto', async () => {
+  it('a manual choice holds until the card is closed, even after walking on', async () => {
     const s = setup()
     const store = useArScanStore()
     await store.start(video)
@@ -162,9 +162,36 @@ describe('arScan store', () => {
     s.heading(0)
     vi.setSystemTime(5000)
     s.heading(0)
-    expect(store.selection).toEqual({ id: 2, manual: true })
     s.fix(fix(5, 0, 50))
+    expect(store.selection).toEqual({ id: 2, manual: true })
+    store.close()
     expect(store.selection.manual).toBe(false)
+  })
+
+  it('an open card is held: turning to another building does not switch or reopen it until closed', async () => {
+    const s = setup()
+    const store = useArScanStore()
+    await store.start(video)
+    s.fix(fix())
+    await flush()
+    s.heading(0)
+    vi.setSystemTime(900)
+    s.heading(0)
+    expect(store.selection).toEqual({ id: 1, manual: false })
+    const loads = vi.mocked(services().api.getBuildingFacts).mock.calls.length
+    for (let t = 1000; t < 6000; t += 250) {
+      vi.setSystemTime(t)
+      s.heading(90) // looking at the other building for 5 s
+    }
+    expect(store.selection.id).toBe(1)
+    expect(vi.mocked(services().api.getBuildingFacts).mock.calls.length).toBe(loads) // no reload
+    store.close()
+    expect(store.selection.id).toBeNull()
+    for (let t = 6000; t < 8000; t += 250) {
+      vi.setSystemTime(t)
+      s.heading(90)
+    }
+    expect(store.selection).toEqual({ id: 2, manual: false }) // detection resumed after closing
   })
 
   it('phone held flat: no heading, nothing is guessed', async () => {

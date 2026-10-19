@@ -37,7 +37,7 @@ const status = computed<{ text: string; warn?: boolean } | null>(() => {
   if (scan.outlinesState === 'loading') return { text: 'Ищем здания рядом…' }
   if (scan.outlinesState === 'error')
     return { text: scan.outlinesError?.code === 'offline' ? 'Нет сети' : 'Не удалось загрузить здания', warn: true }
-  if (scan.selection.manual) return { text: 'Выбрано вручную' }
+  if (scan.selection.id !== null) return { text: 'Поиск на паузе — закройте карточку, чтобы искать дальше' }
   const m = scan.match
   if (m?.status === 'inaccurate')
     return { text: `Точность GPS ±${Math.round(scan.position?.accuracyM ?? 0)} м — выберите здание из списка`, warn: true }
@@ -81,6 +81,11 @@ const orgEntry = computed(() => (outline.value ? info.organizations(outline.valu
 function choose(id: number): void {
   expanded.value = false
   scan.choose(id)
+}
+
+function closeCard(): void {
+  expanded.value = false
+  scan.close()
 }
 
 function openScan(gameBuildingId: string): void {
@@ -134,9 +139,6 @@ onBeforeUnmount(() => {
 
       <AppButton v-if="scan.headingState === 'needs_permission'" @click="scan.enableCompass()">Включить компас</AppButton>
       <AppButton v-if="scan.outlinesState === 'error'" variant="secondary" @click="scan.retryOutlines()">Повторить</AppButton>
-      <button v-if="scan.selection.manual" type="button" class="ar__auto" @click="scan.auto()">
-        Определять автоматически
-      </button>
 
       <BuildingInfoSheet
         v-if="outline"
@@ -149,6 +151,7 @@ onBeforeUnmount(() => {
         @retry="info.load(outline.id, true)"
         @scan="openScan"
         @memory="memoryOpen = true"
+        @close="closeCard"
       />
 
       <section v-else-if="options.length" class="ar__choice card" aria-label="Выберите здание">
@@ -259,16 +262,6 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   color: #fff;
-}
-.ar__auto {
-  align-self: flex-start;
-  padding: 8px 14px;
-  border: 0;
-  border-radius: var(--r-pill);
-  background: rgb(0 0 0 / 55%);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
 }
 .ar__choice {
   padding: 14px;

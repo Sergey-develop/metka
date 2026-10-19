@@ -89,7 +89,10 @@ describe('ArScanView', () => {
     expect(w.find('.info').exists()).toBe(false)
     await w.findAll('.ar__option')[0]!.trigger('click')
     expect(w.find('.info__title').text()).toBe('Школа')
-    expect(w.find('.ar__auto').exists()).toBe(true)
+    expect(w.find('.ar__status').text()).toContain('Поиск на паузе')
+    await w.find('.info__close').trigger('click')
+    expect(w.find('.info').exists()).toBe(false) // closed: back to the list
+    expect(w.findAll('.ar__option')).toHaveLength(2)
     w.unmount()
   })
 })

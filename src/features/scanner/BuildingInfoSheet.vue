@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import AppButton from '@/components/ui/AppButton.vue'
+import AppIcon from '@/components/ui/AppIcon.vue'
 import FigureLoader from '@/components/ui/FigureLoader.vue'
 import type { InfoEntry } from '@/stores/buildingInfo'
 import type { BuildingOrganization, BuildingOutline } from '@/types/game'
@@ -25,6 +26,7 @@ const emit = defineEmits<{
   /** open the existing verified scan flow (/scan/:buildingId) */
   scan: [gameBuildingId: string]
   memory: []
+  close: []
 }>()
 
 const facts = computed(() => (props.info?.state === 'ready' ? props.info.facts : null))
@@ -80,6 +82,9 @@ function orgCountText(n: number): string {
       :aria-expanded="expanded"
       @click="emit('update:expanded', !expanded)"
     />
+    <button type="button" class="info__close" aria-label="Закрыть" @click="emit('close')">
+      <AppIcon name="close" :size="16" />
+    </button>
     <header class="info__head">
       <p class="info__kind">
         <span v-if="facts?.kind">{{ facts.kind }}</span>
@@ -174,6 +179,26 @@ function orgCountText(n: number): string {
   &--expanded {
     max-height: 80vh;
   }
+}
+.info {
+  position: relative;
+}
+.info__close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--c-bg);
+  color: var(--c-text-2);
+}
+.info__head {
+  padding-right: 40px;
 }
 .info__grip {
   align-self: center;
