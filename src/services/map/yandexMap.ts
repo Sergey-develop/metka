@@ -85,11 +85,11 @@ const TOP_MARKERS_Z_INDEX = 1700
 /** the fogged area: the game area (Moscow incl. New Moscow), same as MAP_AREA */
 const FOG_AREA = [36.8, 55.1, 38.4, 56.2] as const
 /**
- * 0.98: streets and blocks show through only faintly; basemap labels and icons stay unreadable
- * (screenshots at zoom 16–17: at 0.96 large road/station names were still guessable). Explored land
- * is the plain map; the edge between them is just the contrast, no outline.
+ * 0.85: the city stays visible under the fog (streets, blocks, names, metro), while walked land is
+ * clearly brighter. Compared on screenshots at zoom 16–17: at 0.80 explored and unexplored look
+ * almost the same; at 0.90 and above names fade out. Explored land is the plain map, no outline.
  */
-const FOG_OPACITY = 0.98
+const FOG_OPACITY = 0.85
 
 /**
  * Soft edge of the fog: three translucent strokes in the fog colour along the (smoothed) borders of

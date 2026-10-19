@@ -388,13 +388,13 @@ describe('YandexMapService', () => {
     expect(map.of(FakeFeature).some((x) => x.props.id === 'explored')).toBe(true)
   })
 
-  it('fog is 98 % opaque; its only edge effect is a soft mist in the fog colour that follows the zoom', async () => {
+  it('fog is 85 % opaque; its only edge effect is a soft mist in the fog colour that follows the zoom', async () => {
     const { service, map } = await mounted()
     service.render(scene({ fog: true, exploredCells: [[1456534, 1208997]] }))
     const fog = map.of(FakeFeature).find((f) => f.props.id === 'fog')!
     const feather = map.of(FakeFeature).find((f) => f.props.id === 'fog-feather')!
     const style = fog.props.style as { fillOpacity: number; stroke: { width: number }[] }
-    expect(style.fillOpacity).toBe(0.98)
+    expect(style.fillOpacity).toBe(0.85)
     expect(style.stroke.every((s) => s.width === 0)).toBe(true)
     // nothing but the fog and its mist in the fog layer; the mist is fog-coloured (no frame, no glow)
     expect(map.of(FakeFeature).filter((f) => f.props.source === fog.props.source)).toEqual([fog, feather])
