@@ -1,0 +1,69 @@
+name: iOS build (unsigned .ipa for sideloading)
+
+# Builds the iOS app on a GitHub-hosted Mac and uploads an UNSIGNED Metka.ipa artifact.
+# Install it on an iPhone from Windows with Sideloadly and a free Apple ID (re-signs it; 7 days).
+# Started by hand (Actions → "iOS build" → Run workflow): macOS minutes are limited.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The bundled build is a fallback; with CAP_SERVER_URL the app shows the deployed site.
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_YANDEX_MAPS_API_KEY: ${{ vars.VITE_YANDEX_MAPS_API_KEY }}
+          VITE_RECOGNITION_MODEL_URL: ${{ vars.VITE_RECOGNITION_MODEL_URL }}
+          VITE_AUTH_OAUTH_PROVIDERS: ${{ vars.VITE_AUTH_OAUTH_PROVIDERS }}
+
+      - run: npx cap sync ios
+        env:
+          CAP_SERVER_URL: ${{ vars.CAP_SERVER_URL }}
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Build unsigned archive
+        run: |
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            archive
+
+      - name: Package .ipa
+        run: |
+          APP="$(find "$RUNNER_TEMP/App.xcarchive/Products/Applications" -maxdepth 1 -name '*.app' | head -n 1)"
+          test -n "$APP"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry Metka.ipa Payload)
+          ls -la "$RUNNER_TEMP/ipa/Metka.ipa"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Metka-ipa
+          path: ${{ runner.temp }}/ipa/Metka.ipa
+          retention-days: 14

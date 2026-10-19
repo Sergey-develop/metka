@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { services } from '@/app/providers/services'
 import AppIcon from '@/components/ui/AppIcon.vue'
@@ -156,10 +156,6 @@ async function publishOutline(): Promise<void> {
 /** One status line for the exploration mode (null = nothing worth showing). */
 const exploreChip = computed<{ text: string; warn: boolean } | null>(() => {
   const waiting = exploration.pending ? ` (${exploration.pending})` : ''
-  if (exploration.enabled && exploration.paused) {
-    const saving = exploration.sync === 'syncing' ? ' · сохраняем…' : exploration.pending ? ` · не отправлено ${exploration.pending}` : ''
-    return { text: `Исследование на паузе — GPS выключен${saving}`, warn: false }
-  }
   if (exploration.enabled && exploration.sync === 'offline') return { text: `Нет сети · путь сохранится позже${waiting}`, warn: true }
   if (exploration.enabled && exploration.sync === 'error') return { text: `Ошибка сохранения · повторим${waiting}`, warn: true }
   const text = EXPLORE_TEXT[exploration.status]
@@ -246,6 +242,8 @@ onMounted(() => {
     .then((v) => (isAdmin.value = v))
     .catch(() => (isAdmin.value = false))
   void map.startTracking()
+  // the Fog of War opens by itself: exploring starts as soon as location access is granted
+  void exploration.autoStart()
   void map.loadDistricts()
   void quests.load()
   void memories.load()
@@ -256,6 +254,13 @@ onMounted(() => {
     resize.observe(header.value)
   }
 })
+// first launch: the map asks for location; the first fix means access was granted
+watch(
+  () => map.position !== null,
+  (hasFix) => {
+    if (hasFix) void exploration.autoStart()
+  },
+)
 onBeforeUnmount(() => {
   clearTimeout(viewportTimer)
   resize?.disconnect()
@@ -340,27 +345,6 @@ onBeforeUnmount(() => {
       />
     </Transition>
 
-    <button
-      v-if="!map.selectedBuilding && !map.selectedDistrict && !outlines.selected"
-      class="explore"
-      :class="{ 'explore--on': exploration.enabled }"
-      :aria-pressed="exploration.enabled"
-      title="Открывает пройденные улицы. Работает, только пока приложение открыто."
-      @click="exploration.toggle()"
-    >
-      <span class="explore__dot" aria-hidden="true" />
-      Исследование
-    </button>
-    <button
-      v-if="exploration.enabled && !map.selectedBuilding && !map.selectedDistrict && !outlines.selected"
-      class="explore-pause"
-      :aria-pressed="exploration.paused"
-      :aria-label="exploration.paused ? 'Продолжить исследование' : 'Пауза исследования'"
-      @click="exploration.paused ? exploration.resumeByPlayer() : exploration.pauseByPlayer()"
-    >
-      {{ exploration.paused ? '▶' : '❚❚' }}
-    </button>
-
     <RouterLink
       v-if="!map.selectedBuilding && !map.selectedDistrict && !outlines.selected"
       to="/scan"
@@ -388,10 +372,10 @@ onBeforeUnmount(() => {
         <div v-if="fogHint" class="chip chip--hint" role="status">
           <span>{{
             showExploredState === 'none'
-              ? 'Вы ещё ничего не открыли — включите «Исследование» и пройдитесь'
+              ? 'Вы ещё ничего не открыли — пройдитесь, туман рассеется по пути'
               : showExploredState === 'error'
                 ? 'Не удалось найти открытые места'
-                : 'Здесь туман — включите «Исследование» и пройдитесь'
+                : 'Здесь туман — пройдитесь, чтобы открыть улицы'
           }}</span>
           <button v-if="showExploredState !== 'none'" type="button" :disabled="showExploredState === 'loading'" @click="showExplored">
             {{ showExploredState === 'loading' ? 'Ищем…' : showExploredState === 'error' ? 'Повторить' : 'Показать открытое' }}
@@ -664,7 +648,7 @@ onBeforeUnmount(() => {
 .ar-scan {
   position: absolute;
   right: 16px;
-  bottom: calc(var(--nav-height) + var(--safe-bottom) + 156px);
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + 100px);
   z-index: 5;
   width: 48px;
   height: 48px;
@@ -674,62 +658,6 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   color: #fff;
-}
-.explore-pause {
-  position: absolute;
-  right: 16px;
-  bottom: calc(var(--nav-height) + var(--safe-bottom) + 212px);
-  z-index: 5;
-  width: 48px;
-  height: 48px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--c-surface);
-  box-shadow: var(--shadow-card);
-  color: var(--c-accent);
-  font-size: 15px;
-  font-weight: 700;
-  &[aria-pressed='true'] {
-    background: var(--c-accent);
-    color: #fff;
-  }
-}
-.explore {
-  position: absolute;
-  right: 16px;
-  bottom: calc(var(--nav-height) + var(--safe-bottom) + 100px);
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border: 0;
-  border-radius: var(--r-pill);
-  background: var(--c-surface);
-  box-shadow: var(--shadow-card);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--c-text-2);
-  &--on {
-    background: var(--c-accent);
-    color: #fff;
-  }
-}
-.explore__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.6;
-  .explore--on & {
-    opacity: 1;
-    animation: pulse 1.6s ease-in-out infinite;
-  }
-}
-@keyframes pulse {
-  50% {
-    opacity: 0.35;
-  }
 }
 
 .bottom {

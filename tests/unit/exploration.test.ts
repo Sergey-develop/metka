@@ -302,7 +302,7 @@ describe('GpsExplorationTracker persistence and sync state', () => {
 describe('exploration store', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  it('toggles tracking, merges server cells and disables itself on denied permission', async () => {
+  it('tracks, merges server cells, stops in the background and disables itself on denied permission', async () => {
     installFakeServices()
     let resultListener: ((r: ExplorationResult) => void) | null = null
     let changeListener: ((s: { status: 'permission_denied'; accuracyM: null; pending: 0 }) => void) | null = null
@@ -316,7 +316,7 @@ describe('exploration store', () => {
     }
     Object.assign(services(), { createExplorationTracker: () => fake })
     const store = useExplorationStore()
-    await store.toggle()
+    await store.enable()
     expect(store.enabled).toBe(true)
     expect(fake.start).toHaveBeenCalled()
     resultListener!(ok([[1, 2], [1, 3]], 7))
@@ -336,10 +336,11 @@ describe('exploration store', () => {
     expect(fake.start).toHaveBeenCalledTimes(2) // not resumed
   })
 
-  it('player pause: GPS off, survives background/foreground, resumes only on request', async () => {
+  it('always on: starts by itself once location is granted, never prompts, comes back after a restart', async () => {
     installFakeServices()
     const fake = {
       state: { status: 'off' as const, accuracyM: null, pending: 0 },
+      diagnostics: undefined,
       start: vi.fn(async () => undefined),
       stop: vi.fn(async () => undefined),
       onChange: vi.fn(() => () => undefined),
@@ -347,25 +348,32 @@ describe('exploration store', () => {
       onUploadError: vi.fn(() => () => undefined),
     }
     Object.assign(services(), { createExplorationTracker: () => fake })
+    const geo = services().geolocation as unknown as { permission: string; requestPermission: () => Promise<string> }
+    const ask = vi.spyOn(geo, 'requestPermission')
     const store = useExplorationStore()
-    await store.pauseByPlayer() // not enabled: nothing to pause
-    expect(store.paused).toBe(false)
-    await store.enable()
-    await store.pauseByPlayer()
-    expect(store).toMatchObject({ enabled: true, paused: true })
-    expect(fake.stop).toHaveBeenCalledTimes(1)
-    await store.pause() // app to background
-    await store.resume() // back to foreground: stays paused
+
+    geo.permission = 'prompt' // not granted yet: the map asks first, auto-start must not
+    await store.autoStart()
+    expect(store.enabled).toBe(false)
+    expect(ask).not.toHaveBeenCalled()
+
+    geo.permission = 'granted'
+    await store.autoStart()
+    expect(store.enabled).toBe(true)
     expect(fake.start).toHaveBeenCalledTimes(1)
-    await store.resumeByPlayer()
-    expect(store.paused).toBe(false)
-    expect(fake.start).toHaveBeenCalledTimes(2)
-    await store.pauseByPlayer()
-    await store.disable() // switching off clears the pause
-    expect(store).toMatchObject({ enabled: false, paused: false })
+    await store.autoStart() // repeated calls are harmless
+    expect(fake.start).toHaveBeenCalledTimes(1)
+
+    setActivePinia(createPinia()) // app restarted
+    installFakeServices()
+    Object.assign(services(), { createExplorationTracker: () => fake })
+    ;(services().geolocation as unknown as { permission: string }).permission = 'granted'
+    const again = useExplorationStore()
+    await again.autoStart()
+    expect(again.enabled).toBe(true)
   })
 
-  it('keeps the screen on exactly while exploring (on and not paused), counts background stops', async () => {
+  it('keeps the screen on while exploring, counts background stops, releases when switched off', async () => {
     installFakeServices()
     const fake = {
       state: { status: 'off' as const, accuracyM: null, pending: 0 },
@@ -382,14 +390,11 @@ describe('exploration store', () => {
     await store.enable()
     expect(keepOn).toHaveBeenCalledTimes(1)
     await vi.waitFor(() => expect(store.screenKeptOn).toBe(true))
-    await store.pauseByPlayer()
-    expect(release).toHaveBeenCalledTimes(1)
-    await store.resumeByPlayer()
-    expect(keepOn).toHaveBeenCalledTimes(2)
-    await store.pause() // app to background
+    await store.pause() // app to background (the browser drops the lock itself and it is re-taken on return)
     expect(store.backgroundStops).toBe(1)
-    await store.disable()
-    expect(release).toHaveBeenCalledTimes(2)
+    expect(store.enabled).toBe(true)
+    await store.disable() // e.g. sign-out
+    expect(release).toHaveBeenCalledTimes(1)
     await vi.waitFor(() => expect(store.screenKeptOn).toBe(false))
   })
 

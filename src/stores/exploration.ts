@@ -40,8 +40,6 @@ const contains = (o: Bbox, i: Bbox) => o.minLng <= i.minLng && o.minLat <= i.min
 export const useExplorationStore = defineStore('exploration', () => {
   /** player's intent; tracking itself also needs permission and the foreground */
   const enabled = ref(false)
-  /** the player paused exploring (GPS off, nothing revealed) without switching the mode off */
-  const paused = ref(false)
   const status = ref<ExplorationStatus>('off')
   const accuracyM = ref<number | null>(null)
   const pending = ref(0)
@@ -116,7 +114,6 @@ export const useExplorationStore = defineStore('exploration', () => {
       sync.value = s.sync
       if (s.status === 'permission_denied' || s.status === 'disabled') {
         enabled.value = false
-        paused.value = false
         syncWakeLock()
       }
     })
@@ -135,60 +132,52 @@ export const useExplorationStore = defineStore('exploration', () => {
     return t
   }
 
-  /** keep the screen on exactly while the player is exploring (on and not paused) */
+  /** keep the screen on exactly while exploring is on (GPS stops with the screen in a browser) */
   function syncWakeLock(): void {
     const wakeLock = services().wakeLock
     wakeUnsub ??= wakeLock.onChange((active) => (screenKeptOn.value = active))
-    if (enabled.value && !paused.value) void wakeLock.keepOn().then((ok) => (screenKeptOn.value = ok))
+    if (enabled.value) void wakeLock.keepOn().then((ok) => (screenKeptOn.value = ok))
     else void wakeLock.release().then(() => (screenKeptOn.value = false))
   }
 
   async function enable(): Promise<void> {
     enabled.value = true
-    paused.value = false
     syncWakeLock()
     await ensureTracker().start()
   }
 
   async function disable(): Promise<void> {
     enabled.value = false
-    paused.value = false
     syncWakeLock()
     await tracker?.stop()
-  }
-
-  function toggle(): Promise<void> {
-    return enabled.value ? disable() : enable()
   }
 
   /**
-   * The player pauses exploring: GPS stops and buffered points are uploaded. Nothing is revealed
-   * across the pause — the server starts a new segment after a gap of more than 30 s.
+   * Exploring is always on while the app is open: it starts by itself on the map once location access
+   * is granted (the map asks for it with its own explanation first; this never prompts). Stopped only
+   * in the background (pause/resume from main.ts). Safe to call repeatedly.
    */
-  async function pauseByPlayer(): Promise<void> {
-    if (!enabled.value || paused.value) return
-    paused.value = true
-    syncWakeLock()
-    await tracker?.stop()
-  }
-
-  async function resumeByPlayer(): Promise<void> {
-    if (!enabled.value || !paused.value) return
-    paused.value = false
-    syncWakeLock()
-    await ensureTracker().start()
+  async function autoStart(): Promise<void> {
+    if (enabled.value) return
+    try {
+      if ((await services().geolocation.checkPermission()) !== 'granted') return
+    } catch {
+      return
+    }
+    if (enabled.value) return
+    await enable()
   }
 
   /** App went to the background: stop GPS, keep the switch on. */
   async function pause(): Promise<void> {
     if (!enabled.value) return
-    if (!paused.value) backgroundStops.value++
+    backgroundStops.value++
     await tracker?.stop()
   }
 
   /** Back in the foreground: resume if the player left it on and did not pause it. */
   async function resume(): Promise<void> {
-    if (enabled.value && !paused.value) await ensureTracker().start()
+    if (enabled.value) await ensureTracker().start()
   }
 
   /**
@@ -251,7 +240,6 @@ export const useExplorationStore = defineStore('exploration', () => {
 
   async function reset(): Promise<void> {
     enabled.value = false
-    paused.value = false
     syncWakeLock()
     wakeUnsub?.()
     wakeUnsub = null
@@ -278,7 +266,6 @@ export const useExplorationStore = defineStore('exploration', () => {
 
   return {
     enabled,
-    paused,
     status,
     accuracyM,
     pending,
@@ -295,11 +282,9 @@ export const useExplorationStore = defineStore('exploration', () => {
     screenKeptOn,
     enable,
     disable,
-    toggle,
+    autoStart,
     pause,
     resume,
-    pauseByPlayer,
-    resumeByPlayer,
     loadViewport,
     invalidate,
     reset,
