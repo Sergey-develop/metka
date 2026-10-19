@@ -18,7 +18,7 @@ export interface FogMultiPolygon {
 /** [minLng, minLat, maxLng, maxLat] of the fogged area */
 export type FogArea = readonly [number, number, number, number]
 
-type V = [x: number, y: number] // grid corner (cell x, cell y)
+export type V = [x: number, y: number] // grid corner (cell x, cell y)
 interface Ring {
   pts: V[]
   /** signed area in cell units: > 0 counter-clockwise (outer boundary of explored land) */
@@ -147,6 +147,38 @@ function probe(ring: Ring): [number, number] {
 
 const toLngLat = ([x, y]: V): number[] => [x * CELL_LNG_DEG - 180, y * CELL_LAT_DEG - 90]
 
+/**
+ * Rounds the staircase of cell corners into a soft curve (Chaikin corner cutting) while keeping the
+ * edge of visibility exact enough to trust:
+ *  - every corner is cut at most `cap` cells from the vertex (halved each pass), so a long straight
+ *    run stays straight and the line never moves more than ≈0.35 cell (≈4 m) from the cell edges;
+ *  - a cell centre is 0.5 cell from its own edges, so no explored cell centre ever falls under the
+ *    fog and no unexplored centre is revealed — big unexplored yards stay covered.
+ * Works on the grid-unit ring (cells ≈ 11.1 × 11.3 m, close enough to square for this).
+ */
+export const SMOOTH_PASSES = 2
+export const SMOOTH_CAP_CELLS = 0.5
+
+export function smoothRing(pts: readonly V[], passes = SMOOTH_PASSES, cap = SMOOTH_CAP_CELLS): V[] {
+  let ring = pts.slice()
+  let limit = cap
+  for (let pass = 0; pass < passes && ring.length >= 3; pass++) {
+    const next: V[] = []
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i]!
+      const b = ring[(i + 1) % ring.length]!
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1])
+      if (len === 0) continue
+      const d = Math.min(len / 4, limit) / len
+      next.push([a[0] + (b[0] - a[0]) * d, a[1] + (b[1] - a[1]) * d])
+      next.push([b[0] - (b[0] - a[0]) * d, b[1] - (b[1] - a[1]) * d])
+    }
+    ring = next
+    limit /= 2
+  }
+  return ring
+}
+
 function closed(pts: V[], reverse: boolean): number[][] {
   const seq = reverse ? [...pts].reverse() : pts
   const coords = seq.map(toLngLat)
@@ -158,7 +190,8 @@ function closed(pts: V[], reverse: boolean): number[][] {
  * Fog over `area` with the explored cells cut out. GeoJSON winding: outer rings counter-clockwise,
  * holes clockwise. Cells outside the area are ignored.
  */
-export function fogGeometry(cells: Iterable<Cell>, area: FogArea): FogMultiPolygon {
+export function fogGeometry(cells: Iterable<Cell>, area: FogArea, options: { smooth?: boolean } = {}): FogMultiPolygon {
+  const shape = (pts: V[]) => (options.smooth ? smoothRing(pts) : pts)
   const [minLng, minLat, maxLng, maxLat] = area
   const inArea: Cell[] = []
   for (const c of cells) {
@@ -197,7 +230,7 @@ export function fogGeometry(cells: Iterable<Cell>, area: FogArea): FogMultiPolyg
   const main: number[][][] = [outerArea]
   const islands = new Map<number, number[][][]>()
   rings.forEach((r, i) => {
-    if (r.area < 0) islands.set(i, [closed(r.pts, true)]) // CW → CCW outer
+    if (r.area < 0) islands.set(i, [closed(shape(r.pts), true)]) // CW → CCW outer
   })
   rings.forEach((r, i) => {
     if (r.area <= 0) return
@@ -205,7 +238,7 @@ export function fogGeometry(cells: Iterable<Cell>, area: FogArea): FogMultiPolyg
     // the same region), but climb defensively instead of dropping the hole
     let p = parent.get(i) ?? null
     while (p !== null && !islands.has(p)) p = parent.get(p) ?? null
-    const hole = closed(r.pts, true) // CCW → CW hole
+    const hole = closed(shape(r.pts), true) // CCW → CW hole
     if (p === null) main.push(hole)
     else islands.get(p)!.push(hole)
   })

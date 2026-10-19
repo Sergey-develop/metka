@@ -11,6 +11,7 @@ import { WebCameraService } from '@/services/camera/webCamera'
 import { CapacitorGeolocationService } from '@/services/geolocation/capacitorGeolocation'
 import type { GeolocationService } from '@/services/geolocation/types'
 import { CapacitorAppLifecycle, type AppLifecycleService } from '@/services/lifecycle/appLifecycle'
+import { BrowserScreenWakeLock, type ScreenWakeLock } from '@/services/lifecycle/wakeLock'
 import { GpsExplorationTracker, type ExplorationTracker } from '@/services/exploration/explorationTracker'
 import { PreferencesPendingPointStore } from '@/services/exploration/pendingPointStore'
 import { SupabaseMemoriesService, type MemoriesService } from '@/services/memories/memoriesService'
@@ -38,6 +39,8 @@ export interface AppServices {
   geolocation: GeolocationService
   recognition: BuildingRecognitionService
   lifecycle: AppLifecycleService
+  /** keeps the screen on while exploring (GPS stops with the screen in a browser) */
+  wakeLock: ScreenWakeLock
   /** a fresh map engine instance per map screen (ADR-003: Yandex JS API 3.0) */
   createMap: () => MapService
   /** album of memories (private photos in Storage) */
@@ -75,6 +78,7 @@ export async function createServices(config: AppConfig): Promise<AppServices> {
     api,
     auth: new AuthService(supabase, config),
     lifecycle: new CapacitorAppLifecycle(),
+    wakeLock: new BrowserScreenWakeLock(),
     memories: new SupabaseMemoriesService(supabase, prepareMemoryPhoto),
     createMap: () => new YandexMapService(() => loadYandexMaps(config.yandexMapsApiKey)),
     cameraPreview: new MediaDevicesCameraPreview(),

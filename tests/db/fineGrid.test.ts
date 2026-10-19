@@ -4,7 +4,8 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { cellKey, cellOf, corridorCells, CORRIDOR_HALF_WIDTH_M } from '../../src/services/exploration/grid.ts'
 import { createTestDb, SEED, type TestDb } from './harness'
 
-// Migration 013: 0.0002 × 0.00036 grid → 0.0001 × 0.00018 grid with an 8 m corridor.
+// Migration 013: 0.0002 × 0.00036 grid → 0.0001 × 0.00018 grid with an 8 m corridor;
+// migration 014: corridor half-width 18 m (at least 3 cells across the route).
 
 const LAT = 55.6534 // near metro Varshavskaya
 const LNG = 37.6196
@@ -270,13 +271,15 @@ describe('fine grid and corridor (migration 013)', () => {
       const bearing = ((i * 47) % 360) * (Math.PI / 180)
       return { a, b: { lat: a.lat + (Math.cos(bearing) * d) / 111_320, lng: a.lng + (Math.sin(bearing) * d) / mPerDegLng(a.lat) } }
     })
-    for (const { a, b } of segs) {
-      const r = await t.db.query<{ cell_y: number; cell_x: number }>(`select * from public._corridor_cells($1, $2, $3, $4)`, [a.lat, a.lng, b.lat, b.lng])
-      expect(new Set(r.rows.map((c) => `${c.cell_y}:${c.cell_x}`))).toEqual(new Set(corridorCells(a, b).map(cellKey)))
+    for (const w of [8, CORRIDOR_HALF_WIDTH_M]) {
+      for (const { a, b } of segs) {
+        const r = await t.db.query<{ cell_y: number; cell_x: number }>(`select * from public._corridor_cells($1, $2, $3, $4, $5)`, [a.lat, a.lng, b.lat, b.lng, w])
+        expect(new Set(r.rows.map((c) => `${c.cell_y}:${c.cell_x}`))).toEqual(new Set(corridorCells(a, b, w).map(cellKey)))
+      }
     }
   })
 
-  it('the corridor follows the route: no gaps under the path, nothing beyond 8 m, no parallel street', async () => {
+  it('the corridor follows the route: no gaps, at least 3 cells across, nothing beyond 18 m, no street 40 m away', async () => {
     const u = await newUser()
     const pts = walk(LAT, LNG, 20, 10, 6, 63) // 190 m north-east
     const r = await record(u, pts)
@@ -287,11 +290,17 @@ describe('fine grid and corridor (migration 013)', () => {
         const lat = pts[i]!.lat + ((pts[i + 1]!.lat - pts[i]!.lat) * k) / 10
         const lng = pts[i]!.lng + ((pts[i + 1]!.lng - pts[i]!.lng) * k) / 10
         expect(opened.has(cellKey(cellOf(lat, lng)))).toBe(true)
+        // and its neighbours across the route (it runs mostly east, so across = north/south)
+        const [y, x] = cellOf(lat, lng)
+        if (i > 0 && i < pts.length - 2) {
+          expect(opened.has(cellKey([y - 1, x]))).toBe(true)
+          expect(opened.has(cellKey([y + 1, x]))).toBe(true)
+        }
       }
     }
-    // a parallel street 25 m away gets nothing
+    // a parallel street 40 m away gets nothing (the corridor never reaches beyond ≈26 m)
     for (const p of pts) {
-      const side = { lat: p.lat - (25 * Math.sin((63 * Math.PI) / 180)) / 111_320, lng: p.lng + (25 * Math.cos((63 * Math.PI) / 180)) / mPerDegLng(p.lat) }
+      const side = { lat: p.lat - (40 * Math.sin((63 * Math.PI) / 180)) / 111_320, lng: p.lng + (40 * Math.cos((63 * Math.PI) / 180)) / mPerDegLng(p.lat) }
       expect(opened.has(cellKey(cellOf(side.lat, side.lng)))).toBe(false)
     }
     // all opened cell centres are within the half-width of the route
@@ -313,12 +322,12 @@ describe('fine grid and corridor (migration 013)', () => {
     }
   })
 
-  it('≈1 km of walking opens about the district threshold (130 cells)', async () => {
+  it('≈1 km of walking opens ≈290–300 cells (18 m corridor), within the 10-minute cap', async () => {
     const u = await newUser()
     const r = await record(u, walk(LAT, LNG, 201, 5, 3, 30)) // 1 km at 1.7 m/s
     expect(r.rejected).toEqual({})
-    expect(r.newCells.length).toBeGreaterThan(115)
-    expect(r.newCells.length).toBeLessThan(145)
+    expect(r.newCells.length).toBeGreaterThan(270)
+    expect(r.newCells.length).toBeLessThan(320)
   })
 
   it('a single fix, a pause or a jump still reveals nothing', async () => {

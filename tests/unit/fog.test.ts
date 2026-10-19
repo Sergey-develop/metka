@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fogGeometry, type FogArea } from '@/services/exploration/fog'
+import { fogGeometry, smoothRing, type FogArea, type V } from '@/services/exploration/fog'
 import { CELL_LAT_DEG, CELL_LNG_DEG, cellBounds, cellOf, corridorCells, type Cell } from '@/services/exploration/grid'
 
 const [Y0, X0] = cellOf(55.6534, 37.6196)
@@ -125,5 +125,93 @@ describe('fogGeometry', () => {
     const ms = performance.now() - t0
     expect(g.coordinates.length).toBeGreaterThan(0)
     expect(ms).toBeLessThan(1500)
+  })
+
+  describe('smoothing (soft outline)', () => {
+    /** distance from a point to the closest segment of a ring (grid units) */
+    function distToRing(p: V, ring: readonly V[]): number {
+      let best = Infinity
+      for (let i = 0; i < ring.length; i++) {
+        const a = ring[i]!
+        const b = ring[(i + 1) % ring.length]!
+        const ex = b[0] - a[0]
+        const ey = b[1] - a[1]
+        const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * ex + (p[1] - a[1]) * ey) / (ex * ex + ey * ey || 1)))
+        best = Math.min(best, Math.hypot(p[0] - a[0] - t * ex, p[1] - a[1] - t * ey))
+      }
+      return best
+    }
+    const corridor = () => {
+      const kx = 111_320 * Math.cos((55.6534 * Math.PI) / 180)
+      const pts = Array.from({ length: 40 }, (_, i) => ({ lat: 55.6534 + (Math.sin(i / 5) * 60) / 111_320, lng: 37.6196 + (i * 9) / kx }))
+      const cells = new Map<string, Cell>()
+      for (let i = 1; i < pts.length; i++) for (const cell of corridorCells(pts[i - 1]!, pts[i]!)) cells.set(`${cell[0]}:${cell[1]}`, cell)
+      return cells
+    }
+    const block = () => {
+      const cells = new Map<string, Cell>()
+      for (let y = 0; y < 9; y++) for (let x = 0; x < 9; x++) if (y < 2 || y > 6 || x < 2 || x > 6) cells.set(`${Y0 + y}:${X0 + x}`, c(y, x))
+      cells.set(`${Y0 + 4}:${X0 + 4}`, c(4, 4)) // explored spot in the yard
+      return cells
+    }
+
+    it('keeps every cell centre on its side: explored stays open, unexplored stays fogged (yards too)', () => {
+      for (const cells of [corridor(), block(), new Map([[`${Y0}:${X0}`, c(0, 0)]])]) {
+        const g = fogGeometry(cells.values(), AREA, { smooth: true })
+        const ys = [...cells.values()].map((v) => v[0])
+        const xs = [...cells.values()].map((v) => v[1])
+        for (let y = Math.min(...ys) - 2; y <= Math.max(...ys) + 2; y++) {
+          for (let x = Math.min(...xs) - 2; x <= Math.max(...xs) + 2; x++) {
+            expect(fogged(g, ...centre([y, x]))).toBe(!cells.has(`${y}:${x}`))
+          }
+        }
+      }
+    })
+
+    it('moves the border at most ≈0.36 cell (≈4 m) from the exact cell edges', () => {
+      const exact = fogGeometry(block().values(), AREA)
+      const soft = fogGeometry(block().values(), AREA, { smooth: true })
+      const toGrid = (ring: number[][]): V[] => ring.slice(0, -1).map(([lng, lat]) => [(lng! + 180) / CELL_LNG_DEG, (lat! + 90) / CELL_LAT_DEG])
+      const exactRings = exact.coordinates.flatMap((poly, i) => (i === 0 ? poly.slice(1) : poly)).map(toGrid)
+      const softRings = soft.coordinates.flatMap((poly, i) => (i === 0 ? poly.slice(1) : poly)).map(toGrid)
+      expect(softRings).toHaveLength(exactRings.length)
+      let worst = 0
+      softRings.forEach((ring, i) => ring.forEach((p) => (worst = Math.max(worst, distToRing(p, exactRings[i]!)))))
+      expect(worst).toBeLessThanOrEqual(0.36)
+      expect(worst).toBeGreaterThan(0.1) // it did round the corners
+    })
+
+    it('rounds corners but keeps long straight runs straight', () => {
+      const square: V[] = [
+        [0, 0],
+        [20, 0],
+        [20, 20],
+        [0, 20],
+      ]
+      const r = smoothRing(square)
+      // the middle of each side is untouched: a point at (10, 0) lies on the smoothed outline
+      expect(distToRing([10, 0], r)).toBeLessThan(1e-9)
+      // the corner is cut, but by less than half a cell
+      const d = distToRing([0, 0], r)
+      expect(d).toBeGreaterThan(0.2)
+      expect(d).toBeLessThan(0.36)
+    })
+
+    it('stays fast with smoothing for a heavy explorer (~20k cells)', () => {
+      const kx = 111_320 * Math.cos((55.7 * Math.PI) / 180)
+      const cells = new Map<string, Cell>()
+      let p = { lat: 55.7, lng: 37.6 }
+      let a = 0
+      for (let i = 0; i < 1500; i++) {
+        a += Math.sin(i / 7) * 0.6
+        const q = { lat: p.lat + (Math.cos(a) * 12) / 111_320, lng: p.lng + (Math.sin(a) * 12) / kx }
+        for (const cell of corridorCells(p, q)) cells.set(`${cell[0]}:${cell[1]}`, cell)
+        p = q
+      }
+      const t0 = performance.now()
+      const g = fogGeometry(cells.values(), AREA, { smooth: true })
+      expect(performance.now() - t0).toBeLessThan(2000)
+      expect(g.coordinates.length).toBeGreaterThan(0)
+    })
   })
 })

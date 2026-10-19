@@ -9,13 +9,13 @@ export const CELL_LAT_DEG = 0.0001
 export const CELL_LNG_DEG = 0.00018
 
 /**
- * A walked segment reveals every cell whose centre is within this distance of it: an ≈16 m wide
- * corridor on average (2 × 8 m). The actual width depends on the walking direction relative to the
- * grid, about 10–22 m (one row of cells when walking along cell centres, two along a row boundary).
- * 8 m is also above the cell's half-diagonal (7.88–7.99 m in the game area), so the cell under every
- * point of the path is always included and the corridor has no gaps.
+ * A walked segment reveals every cell whose centre is within this distance of it (migration 014;
+ * was 8 m in 013). 18 m gives at least 3 cells across the route in any direction anywhere in the
+ * game area (a neighbouring cell's centre is at most 17.2 m away), ≈37 m on average and never more
+ * than ≈26 m from the route. It is far above the cell's half-diagonal (≤ 8 m), so the corridor has
+ * no gaps.
  */
-export const CORRIDOR_HALF_WIDTH_M = 8
+export const CORRIDOR_HALF_WIDTH_M = 18
 
 /** metres per degree used by the corridor test (local equirectangular; same constants in SQL) */
 export const CORRIDOR_M_PER_DEG = 111_320

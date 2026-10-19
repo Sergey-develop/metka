@@ -104,6 +104,7 @@ export function installFakeServices(): FakeServices {
     geolocation,
     recognition,
     lifecycle: { onActiveChange: () => () => undefined, onDeepLink: () => () => undefined },
+    wakeLock: { supported: true, active: false, keepOn: vi.fn(async () => true), release: vi.fn(async () => undefined), onChange: () => () => undefined },
     createMap: () => {
       throw new Error('map is not available in unit tests')
     },

@@ -2,6 +2,7 @@ import type {
   DrawingStyle,
   LngLat,
   LngLatBounds,
+  MultiLineStringGeometry,
   MultiPolygonGeometry,
   PointGeometry,
   PolygonGeometry,
@@ -16,7 +17,7 @@ import { fogGeometry } from '@/services/exploration/fog'
 import { cellKey, cellOf, cellsToMultiPolygon, type Cell } from '@/services/exploration/grid'
 import { containsPoint, labelPoint, toLngLat } from '@/utils/mapGeometry'
 import type { YmapsApi } from './yandexLoader'
-import type { LngLatPair, MapInit, MapScene, MapService, MapTarget, MapViewport } from './types'
+import { STREET_LEVEL_ZOOM, type LngLatPair, type MapInit, type MapScene, type MapService, type MapTarget, type MapViewport } from './types'
 
 /** Colors from the design mockups (keep in sync with styles/main.scss tokens). */
 export const MAP_COLORS = {
@@ -47,7 +48,7 @@ const DISTRICT_LABEL_MAX_ZOOM = 12.5
  * City view is a flat "game board": opaque okrugs on a plain background, no basemap.
  * From this zoom the Yandex basemap appears and district fills turn translucent.
  */
-const BASEMAP_MIN_ZOOM = 11.5
+const BASEMAP_MIN_ZOOM = STREET_LEVEL_ZOOM
 const DISTRICT_NEAR_ZOOM = BASEMAP_MIN_ZOOM
 /**
  * Panning stays within Moscow incl. New Moscow. Unlike `map.bounds` (top-left, bottom-right),
@@ -83,6 +84,43 @@ const TOP_MARKERS_SOURCE = 'metka-top-markers'
 const TOP_MARKERS_Z_INDEX = 1700
 /** the fogged area: the game area (Moscow incl. New Moscow), same as MAP_AREA */
 const FOG_AREA = [36.8, 55.1, 38.4, 56.2] as const
+/**
+ * 0.98: streets and blocks show through only faintly; basemap labels and icons stay unreadable
+ * (screenshots at zoom 16–17: at 0.96 large road/station names were still guessable). Explored land
+ * is the plain map; the edge between them is just the contrast, no outline.
+ */
+const FOG_OPACITY = 0.98
+
+/**
+ * Soft edge of the fog: three translucent strokes in the fog colour along the (smoothed) borders of
+ * explored land. Centred on the border, so half of each stroke lies on the fog (no visible change)
+ * and half drifts ≈FOG_FEATHER_M onto the open map, fading out: mist, not a frame. Widths follow
+ * the zoom so the mist keeps the same size on the ground; only the style changes with the zoom.
+ */
+const FOG_FEATHER_M = 6
+
+export function fogFeatherStyle(zoom: number): DrawingStyle {
+  const metresPerPx = (156_543.03 * Math.cos((55.75 * Math.PI) / 180)) / 2 ** zoom
+  const px = Math.min(16, Math.max(2, FOG_FEATHER_M / metresPerPx))
+  return {
+    interactive: false,
+    stroke: [
+      { color: MAP_COLORS.fog, width: 2 * px, opacity: 0.22 },
+      { color: MAP_COLORS.fog, width: (4 / 3) * px, opacity: 0.3 },
+      { color: MAP_COLORS.fog, width: (2 / 3) * px, opacity: 0.4 },
+    ],
+  }
+}
+
+/** The borders of explored land and of unexplored yards: every fog ring except the game-area frame. */
+export function fogBorders(fog: GeoJSON.MultiPolygon): MultiLineStringGeometry {
+  const [main, ...islands] = fog.coordinates
+  const rings = [...(main ?? []).slice(1), ...islands.flat()]
+  return { type: 'MultiLineString', coordinates: rings.map((ring) => ring.map(toLngLat)) }
+}
+
+/** zoom rounded to half steps: the feather style is rebuilt only when this changes */
+const featherZoomKey = (zoom: number) => Math.round(zoom * 2) / 2
 const VIEWPORT_SETTLE_MS = 200
 /** Longer than pauses inside a wheel/trackpad zoom, so the basemap is not shown mid-gesture. */
 const BASEMAP_SETTLE_MS = 450
@@ -222,7 +260,7 @@ export class YandexMapService implements MapService {
   private me: { dot: YMapMarker; halo: YMapFeature } | null = null
   private explored: { feature: YMapFeature; cells: readonly Cell[] } | null = null
   private recent: { feature: YMapFeature; cells: readonly Cell[] } | null = null
-  private fog: { feature: YMapFeature; cells: readonly Cell[]; explored: Set<string> } | null = null
+  private fog: { feature: YMapFeature; feather: YMapFeature; featherZoom: number; cells: readonly Cell[]; explored: Set<string> } | null = null
 
   constructor(private readonly loadApi: () => Promise<YmapsApi>) {}
 
@@ -362,6 +400,10 @@ export class YandexMapService implements MapService {
   private setZoom(zoom: number): void {
     const before = this.zoom
     this.zoom = zoom
+    if (this.fog && featherZoomKey(zoom) !== this.fog.featherZoom) {
+      this.fog.featherZoom = featherZoomKey(zoom)
+      this.fog.feather.update({ style: fogFeatherStyle(this.fog.featherZoom) })
+    }
     const crossed = (t: number) => before < t !== zoom < t
     if (crossed(POINTS_MIN_ZOOM) || crossed(DISTRICT_LABEL_MAX_ZOOM)) this.updateZoomClasses()
     // hide at once when leaving street level; showing waits for the map to settle (see onSettled)
@@ -610,37 +652,42 @@ export class YandexMapService implements MapService {
     const show = scene.fog && this.basemapVisible
     if (!show) {
       if (this.fog) {
+        this.map!.removeChild(this.fog.feather)
         this.map!.removeChild(this.fog.feature)
         this.fog = null
       }
       return
     }
     if (this.fog?.cells === scene.exploredCells) return
-    const geometry = toYandexGeometry(fogGeometry(scene.exploredCells, FOG_AREA))
+    const fog = fogGeometry(scene.exploredCells, FOG_AREA, { smooth: true }) as GeoJSON.MultiPolygon
+    const geometry = toYandexGeometry(fog)
+    const borders = fogBorders(fog)
     const explored = new Set(scene.exploredCells.map(cellKey))
     if (this.fog) {
       this.fog.feature.update({ geometry })
+      this.fog.feather.update({ geometry: borders })
       this.fog.cells = scene.exploredCells
       this.fog.explored = explored
       return
     }
-    const feature = new this.api!.YMapFeature({
+    const api = this.api!
+    const feature = new api.YMapFeature({
       id: 'fog',
       source: FOG_SOURCE,
       geometry,
       properties: { kind: 'fog' },
-      // soft strokes along every edge blur the 11 m steps of the grid a little
-      style: {
-        fill: MAP_COLORS.fog,
-        fillOpacity: 1,
-        stroke: [
-          { color: MAP_COLORS.fog, width: 10, opacity: 0.25 },
-          { color: MAP_COLORS.fog, width: 5, opacity: 0.5 },
-        ],
-      },
+      style: { fill: MAP_COLORS.fog, fillOpacity: FOG_OPACITY, stroke: [{ width: 0 }] },
+    })
+    const featherZoom = featherZoomKey(this.zoom)
+    const feather = new api.YMapFeature({
+      id: 'fog-feather',
+      source: FOG_SOURCE,
+      geometry: borders,
+      style: fogFeatherStyle(featherZoom),
     })
     this.map!.addChild(feature)
-    this.fog = { feature, cells: scene.exploredCells, explored }
+    this.map!.addChild(feather)
+    this.fog = { feature, feather, featherZoom, cells: scene.exploredCells, explored }
   }
 
   /** freshly revealed cells: a brighter fill on top of the explored layer, same source */

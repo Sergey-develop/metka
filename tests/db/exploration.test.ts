@@ -57,7 +57,7 @@ async function newUser(): Promise<string> {
   return id
 }
 
-/** cells the server should reveal for a straight segment (8 m corridor), using the client grid */
+/** cells the server should reveal for a straight segment (18 m corridor), using the client grid */
 function expectedCells(a: Pt, b: Pt): Set<string> {
   return new Set(corridorCells(a, b).map(cellKey))
 }
@@ -129,11 +129,11 @@ describe('record_exploration', () => {
       { lat: LAT, lng: LNG + 0.0002, accuracy: 5, t: now - 20_000 }, // back on track, 12.5 m in 10 s
     ])
     expect(r.rejected).toEqual({ too_fast: 1 })
-    // nothing towards the jump (50 rows north): only the 8 m corridor around the east-west walk,
-    // i.e. at most one 11 m row either side of the start row
+    // nothing towards the jump (50 rows north): only the 18 m corridor around the east-west walk,
+    // i.e. at most two 11 m rows either side of the start row
     const startRow = cellOf(LAT, LNG)[0]
     expect(r.newCells.length).toBeGreaterThan(0)
-    expect(r.newCells.every(([y]) => Math.abs(y - startRow) <= 1)).toBe(true)
+    expect(r.newCells.every(([y]) => Math.abs(y - startRow) <= 2)).toBe(true)
   })
 
   it('does not draw a line across a pause, and re-anchors after a long one (bus, metro)', async () => {
@@ -161,10 +161,10 @@ describe('record_exploration', () => {
     expect(replay.rejected.out_of_order).toBe(5)
   })
 
-  it('caps new cells per 10 minutes', async () => {
+  it('caps new cells per 10 minutes (2000 since migration 014)', async () => {
     const u = await newUser()
     await record(u, [])
-    await t.db.query(`update public.exploration_state set window_cells = 1499, window_start = now() where user_id = $1`, [u])
+    await t.db.query(`update public.exploration_state set window_cells = 1999, window_start = now() where user_id = $1`, [u])
     const r = await record(u, walk(LAT, LNG, 5, 15, 5))
     expect(r.newCells).toHaveLength(1)
   })

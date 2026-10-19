@@ -4,6 +4,9 @@ import type { Bbox, BuildingOutline, DistrictOverview, MapBuilding } from '@/typ
 
 export type LngLatPair = [lng: number, lat: number]
 
+/** From this zoom the basemap (and the Fog of War over it) is shown; below it is the okrug board. */
+export const STREET_LEVEL_ZOOM = 11.5
+
 /** What the player tapped on the map; null = empty map. */
 export type MapTarget =
   | { kind: 'outline'; id: number }

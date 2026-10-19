@@ -16,10 +16,11 @@ import { useQuestsStore } from '@/stores/quests'
 import type { ExplorationStatus } from '@/services/exploration/explorationTracker'
 import { DEFAULT_FILTER } from '@/services/exploration/trackFilter'
 import { toApiError } from '@/services/api/errors'
-import type { MapViewport } from '@/services/map/types'
+import { STREET_LEVEL_ZOOM, type MapViewport } from '@/services/map/types'
 import type { MapBuilding } from '@/types/game'
 import BuildingCard from './BuildingCard.vue'
 import DistrictCard from './DistrictCard.vue'
+import ExplorationDiagnostics from './ExplorationDiagnostics.vue'
 import MapCanvas from './MapCanvas.vue'
 import OutlineCard from './OutlineCard.vue'
 import MemoryEditor from '@/features/album/MemoryEditor.vue'
@@ -72,8 +73,11 @@ const GEO_TEXT = {
 
 let viewportTimer: ReturnType<typeof setTimeout> | undefined
 let lastViewport: MapViewport | null = null
+const viewport = ref<MapViewport | null>(null)
 function onViewport({ bbox, zoom }: MapViewport): void {
   lastViewport = { bbox, zoom }
+  viewport.value = { bbox, zoom }
+  if (showExploredState.value !== 'loading') showExploredState.value = 'idle'
   clearTimeout(viewportTimer)
   viewportTimer = setTimeout(() => {
     void map.loadViewport(bbox)
@@ -98,6 +102,32 @@ const isAdmin = ref(false)
 /** Fog of War is always on for players; admins may lift it to set up buildings anywhere */
 const fogLifted = ref(false)
 const fogOn = computed(() => !(isAdmin.value && fogLifted.value))
+/** tap on the exploration chip: where the route gets lost (GPS, filter, upload, server) */
+const diagnosticsOpen = ref(false)
+
+/** Street level under fog with nothing explored in view: say why the map is grey, offer a way out. */
+const fogHint = computed(() => {
+  const v = viewport.value
+  if (!fogOn.value || !v || v.zoom < STREET_LEVEL_ZOOM || exploration.loadingViewport) return false
+  if (map.selectedBuilding || map.selectedDistrict || outlines.selected || diagnosticsOpen.value) return false
+  return !exploration.anyExploredIn(v.bbox)
+})
+const showExploredState = ref<'idle' | 'loading' | 'none' | 'error'>('idle')
+async function showExplored(): Promise<void> {
+  if (showExploredState.value === 'loading') return
+  showExploredState.value = 'loading'
+  try {
+    const area = await exploration.latestExploredArea()
+    if (!area) {
+      showExploredState.value = 'none'
+      return
+    }
+    canvas.value?.fitArea(area, 17)
+    showExploredState.value = 'idle'
+  } catch {
+    showExploredState.value = 'error'
+  }
+}
 const publishing = ref(false)
 const publishError = ref<string | null>(null)
 
@@ -144,6 +174,10 @@ const exploreChip = computed<{ text: string; warn: boolean } | null>(() => {
     const total = exploration.totalCells === null ? '' : ` · всего ${exploration.totalCells}`
     const state = exploration.sync === 'syncing' ? ' · сохраняем…' : exploration.sync === 'saved' ? ' · сохранено' : ''
     const gain = exploration.lastGain ? ` · +${exploration.lastGain.count} новых` : ''
+    // in a browser GPS stops with the screen: warn when it could not be kept on
+    if (!exploration.screenKeptOn) {
+      return { text: `Исследование · открыто ${exploration.sessionCells}${gain} · не выключайте экран`, warn: true }
+    }
     return { text: `Исследование · открыто ${exploration.sessionCells}${total}${gain}${state}`, warn: false }
   }
   return null
@@ -351,18 +385,40 @@ onBeforeUnmount(() => {
         :class="{ 'chips--beside-locate': !map.selectedBuilding && !map.selectedDistrict && !outlines.selected }"
         aria-live="polite"
       >
+        <div v-if="fogHint" class="chip chip--hint" role="status">
+          <span>{{
+            showExploredState === 'none'
+              ? 'Вы ещё ничего не открыли — включите «Исследование» и пройдитесь'
+              : showExploredState === 'error'
+                ? 'Не удалось найти открытые места'
+                : 'Здесь туман — включите «Исследование» и пройдитесь'
+          }}</span>
+          <button v-if="showExploredState !== 'none'" type="button" :disabled="showExploredState === 'loading'" @click="showExplored">
+            {{ showExploredState === 'loading' ? 'Ищем…' : showExploredState === 'error' ? 'Повторить' : 'Показать открытое' }}
+          </button>
+        </div>
         <button v-if="map.error || outlines.error" class="chip chip--error" @click="retry">
           {{ (map.error ?? outlines.error)?.code === 'offline' ? 'Нет сети' : 'Ошибка загрузки' }} · повторить
         </button>
         <span v-else-if="outlines.truncated" class="chip chip--warn">Показаны не все здания — приблизьте карту</span>
         <span v-if="mapError" class="chip chip--warn">Карта загружается с ошибками</span>
-        <span v-if="exploreChip" class="chip" :class="{ 'chip--warn': exploreChip.warn }">{{ exploreChip.text }}</span>
+        <button
+          v-if="exploreChip"
+          type="button"
+          class="chip"
+          :class="{ 'chip--warn': exploreChip.warn }"
+          :aria-expanded="diagnosticsOpen"
+          @click="diagnosticsOpen = !diagnosticsOpen"
+        >
+          {{ exploreChip.text }}
+        </button>
         <button v-if="isAdmin" class="chip" :aria-pressed="fogOn" @click="fogLifted = !fogLifted">
           Туман: {{ fogOn ? 'вкл' : 'выкл' }} (админ)
         </button>
       </div>
+      <ExplorationDiagnostics v-if="diagnosticsOpen && exploration.enabled" @close="diagnosticsOpen = false" />
       <BuildingCard
-        v-if="map.selectedBuilding"
+        v-else-if="map.selectedBuilding"
         :building="map.selectedBuilding"
         :position="map.position"
         @close="map.select(null)"
@@ -548,6 +604,24 @@ onBeforeUnmount(() => {
   &--warn {
     background: var(--c-warning-soft);
     color: #7a4d00;
+  }
+  &--hint {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    background: var(--c-surface);
+    box-shadow: var(--shadow-card);
+    border-radius: 16px;
+    button {
+      border: 0;
+      padding: 6px 12px;
+      border-radius: var(--r-pill);
+      background: var(--c-accent);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+    }
   }
 }
 

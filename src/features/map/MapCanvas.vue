@@ -131,7 +131,12 @@ function fitDistrict(districtId: string): void {
   if (district) map?.fitBounds(bounds(district.boundary), 13.5)
 }
 
-defineExpose({ flyTo, fitDistrict, showCity })
+/** fit a [[minLng, minLat], [maxLng, maxLat]] box, not closer than maxZoom */
+function fitArea(box: [[number, number], [number, number]], maxZoom = 17): void {
+  map?.fitBounds(box, maxZoom)
+}
+
+defineExpose({ flyTo, fitDistrict, showCity, fitArea })
 </script>
 
 <template>

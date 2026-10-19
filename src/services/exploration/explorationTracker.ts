@@ -33,6 +33,48 @@ export interface TrackerState {
   sync: SyncState
 }
 
+/**
+ * What happened to the route, for the in-app diagnostics: GPS fixes on the phone, the client filter,
+ * uploads and the server verdicts. Counted since the tracker was created (one per signed-in user).
+ */
+export interface TrackerDiagnostics {
+  fixes: number
+  /** client filter: worse than the accuracy limit / GPS jumps / standing still / older than the anchor */
+  dropped: { inaccurate: number; outlier: number; too_close: number; out_of_order: number }
+  bestAccuracyM: number | null
+  lastAccuracyM: number | null
+  /** longest pause between two GPS fixes while running, seconds */
+  longestFixGapS: number
+  /** accepted points more than 30 s apart: the server reveals nothing across such a gap */
+  gapsOver30s: number
+  sent: number
+  serverAccepted: number
+  /** server rejections by reason (too_fast, inaccurate, bad_time, out_of_order, outside_area, invalid) */
+  serverRejected: Record<string, number>
+  newCells: number
+  uploadsOk: number
+  uploadsFailed: number
+  starts: number
+}
+
+export function emptyDiagnostics(): TrackerDiagnostics {
+  return {
+    fixes: 0,
+    dropped: { inaccurate: 0, outlier: 0, too_close: 0, out_of_order: 0 },
+    bestAccuracyM: null,
+    lastAccuracyM: null,
+    longestFixGapS: 0,
+    gapsOver30s: 0,
+    sent: 0,
+    serverAccepted: 0,
+    serverRejected: {},
+    newCells: 0,
+    uploadsOk: 0,
+    uploadsFailed: 0,
+    starts: 0,
+  }
+}
+
 /** Keeps not-yet-uploaded points across app restarts. One store per signed-in user. */
 export interface PendingPointStore {
   load(): Promise<TrackPoint[]>
@@ -41,6 +83,8 @@ export interface PendingPointStore {
 
 export interface ExplorationTracker {
   readonly state: TrackerState
+  /** a copy of the counters for the diagnostics panel */
+  readonly diagnostics: TrackerDiagnostics
   /** Asks for location permission if needed. Foreground only: call stop() when the app is backgrounded. */
   start(): Promise<void>
   /** Stops GPS and uploads what is buffered (best effort). */
@@ -78,6 +122,9 @@ export class GpsExplorationTracker implements ExplorationTracker {
   private lastFixAt = 0
   private uploading: Promise<void> | null = null
   private unwatch: (() => void) | null = null
+  private readonly diag = emptyDiagnostics()
+  private lastFixSeenAt: number | null = null
+  private lastAcceptedT: number | null = null
   private ticker: ReturnType<typeof setInterval> | null = null
   private running = false
   private readonly filter: TrackFilter
@@ -102,9 +149,15 @@ export class GpsExplorationTracker implements ExplorationTracker {
     return { status: this.status, accuracyM: this.accuracyM, pending: this.buffer.length, sync: this.sync }
   }
 
+  get diagnostics(): TrackerDiagnostics {
+    return { ...this.diag, dropped: { ...this.diag.dropped }, serverRejected: { ...this.diag.serverRejected } }
+  }
+
   async start(): Promise<void> {
     if (this.running) return
     this.running = true
+    this.diag.starts++
+    this.lastFixSeenAt = null
     this.setStatus('starting')
     await this.restore()
     try {
@@ -163,7 +216,18 @@ export class GpsExplorationTracker implements ExplorationTracker {
     if (!this.running) return
     this.lastFixAt = this.now()
     this.accuracyM = fix.accuracyM
+    const d = this.diag
+    d.fixes++
+    d.lastAccuracyM = fix.accuracyM
+    if (Number.isFinite(fix.accuracyM)) d.bestAccuracyM = Math.min(d.bestAccuracyM ?? Infinity, fix.accuracyM)
+    if (this.lastFixSeenAt !== null) d.longestFixGapS = Math.max(d.longestFixGapS, (this.lastFixAt - this.lastFixSeenAt) / 1000)
+    this.lastFixSeenAt = this.lastFixAt
     const verdict = this.filter.push(fix)
+    if (!verdict.accepted) d.dropped[verdict.reason]++
+    else {
+      if (this.lastAcceptedT !== null && verdict.point.t - this.lastAcceptedT > 30_000) d.gapsOver30s++
+      this.lastAcceptedT = verdict.point.t
+    }
     if (!verdict.accepted && verdict.reason === 'inaccurate') {
       this.setStatus('weak_signal')
       return
@@ -206,9 +270,16 @@ export class GpsExplorationTracker implements ExplorationTracker {
         this.firstBufferedAt = this.now()
         this.persist()
         this.sync = 'saved'
+        const d = this.diag
+        d.uploadsOk++
+        d.sent += batch.length
+        d.serverAccepted += result.accepted
+        d.newCells += result.newCells.length
+        for (const [reason, n] of Object.entries(result.rejected)) d.serverRejected[reason] = (d.serverRejected[reason] ?? 0) + n
         for (const listener of this.resultListeners) listener(result)
       })
       .catch((error: unknown) => {
+        this.diag.uploadsFailed++
         this.sync = this.isOffline() ? 'offline' : 'error'
         for (const listener of this.errorListeners) listener(error)
       })

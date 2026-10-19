@@ -2,8 +2,14 @@ import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import { services } from '@/app/providers/services'
 import { ApiError, toApiError } from '@/services/api/errors'
-import type { ExplorationStatus, ExplorationTracker, SyncState } from '@/services/exploration/explorationTracker'
-import { cellKey, type Cell } from '@/services/exploration/grid'
+import {
+  emptyDiagnostics,
+  type ExplorationStatus,
+  type ExplorationTracker,
+  type SyncState,
+  type TrackerDiagnostics,
+} from '@/services/exploration/explorationTracker'
+import { cellBounds, cellKey, type Cell } from '@/services/exploration/grid'
 import type { Bbox } from '@/types/game'
 import { useAuthStore } from './auth'
 
@@ -50,6 +56,14 @@ export const useExplorationStore = defineStore('exploration', () => {
   /** size of the last batch of newly revealed cells, for a short "+N" notice */
   const lastGain = ref<{ count: number; at: number } | null>(null)
   const error = ref<ApiError | null>(null)
+  /** explored cells for the current viewport are being fetched */
+  const loadingViewport = ref(false)
+  const diagnostics = ref<TrackerDiagnostics>(emptyDiagnostics())
+  /** times the app went to the background while exploring (GPS stops there) */
+  const backgroundStops = ref(0)
+  /** the screen is being kept on while exploring */
+  const screenKeptOn = ref(false)
+  let wakeUnsub: (() => void) | null = null
 
   let tracker: ExplorationTracker | null = null
   let loaded: Bbox | null = null
@@ -91,7 +105,11 @@ export const useExplorationStore = defineStore('exploration', () => {
   function ensureTracker(): ExplorationTracker {
     if (tracker) return tracker
     const t = services().createExplorationTracker(useAuthStore().userId)
+    const readDiagnostics = () => {
+      if (t.diagnostics) diagnostics.value = t.diagnostics
+    }
     t.onChange((s) => {
+      readDiagnostics()
       status.value = s.status
       accuracyM.value = s.accuracyM
       pending.value = s.pending
@@ -99,9 +117,11 @@ export const useExplorationStore = defineStore('exploration', () => {
       if (s.status === 'permission_denied' || s.status === 'disabled') {
         enabled.value = false
         paused.value = false
+        syncWakeLock()
       }
     })
     t.onResult((r) => {
+      readDiagnostics()
       error.value = null
       merge(r.newCells)
       markRecent(r.newCells)
@@ -115,15 +135,25 @@ export const useExplorationStore = defineStore('exploration', () => {
     return t
   }
 
+  /** keep the screen on exactly while the player is exploring (on and not paused) */
+  function syncWakeLock(): void {
+    const wakeLock = services().wakeLock
+    wakeUnsub ??= wakeLock.onChange((active) => (screenKeptOn.value = active))
+    if (enabled.value && !paused.value) void wakeLock.keepOn().then((ok) => (screenKeptOn.value = ok))
+    else void wakeLock.release().then(() => (screenKeptOn.value = false))
+  }
+
   async function enable(): Promise<void> {
     enabled.value = true
     paused.value = false
+    syncWakeLock()
     await ensureTracker().start()
   }
 
   async function disable(): Promise<void> {
     enabled.value = false
     paused.value = false
+    syncWakeLock()
     await tracker?.stop()
   }
 
@@ -138,23 +168,54 @@ export const useExplorationStore = defineStore('exploration', () => {
   async function pauseByPlayer(): Promise<void> {
     if (!enabled.value || paused.value) return
     paused.value = true
+    syncWakeLock()
     await tracker?.stop()
   }
 
   async function resumeByPlayer(): Promise<void> {
     if (!enabled.value || !paused.value) return
     paused.value = false
+    syncWakeLock()
     await ensureTracker().start()
   }
 
   /** App went to the background: stop GPS, keep the switch on. */
   async function pause(): Promise<void> {
-    if (enabled.value) await tracker?.stop()
+    if (!enabled.value) return
+    if (!paused.value) backgroundStops.value++
+    await tracker?.stop()
   }
 
   /** Back in the foreground: resume if the player left it on and did not pause it. */
   async function resume(): Promise<void> {
     if (enabled.value && !paused.value) await ensureTracker().start()
+  }
+
+  /**
+   * Where the player explored last: the newest cell and the explored cells around it (≈1 km), as
+   * [[minLng, minLat], [maxLng, maxLat]]; null when nothing is explored yet. Also adds those cells
+   * to the cache so the fog opens there at once.
+   */
+  async function latestExploredArea(): Promise<[[number, number], [number, number]] | null> {
+    const recent = await services().api.getRecentExploredCells()
+    const newest = recent[0]
+    if (!newest) return null
+    merge(recent)
+    const near = recent.filter((c) => Math.abs(c[0] - newest[0]) <= 90 && Math.abs(c[1] - newest[1]) <= 90)
+    const b = near.map(cellBounds)
+    return [
+      [Math.min(...b.map((x) => x[0])), Math.min(...b.map((x) => x[1]))],
+      [Math.max(...b.map((x) => x[2])), Math.max(...b.map((x) => x[3]))],
+    ]
+  }
+
+  /** Is any cached explored cell inside this box? */
+  function anyExploredIn(box: Bbox): boolean {
+    for (const c of cells.value.values()) {
+      const [minLng, minLat, maxLng, maxLat] = cellBounds(c)
+      if (maxLng >= box.minLng && minLng <= box.maxLng && maxLat >= box.minLat && minLat <= box.maxLat) return true
+    }
+    return false
   }
 
   async function loadViewport(viewport: Bbox, zoom: number): Promise<void> {
@@ -165,6 +226,7 @@ export const useExplorationStore = defineStore('exploration', () => {
     const own = new AbortController()
     controller = own
     const bbox = padBbox(viewport)
+    loadingViewport.value = true
     try {
       const page = await services().api.getExploredCells(bbox, own.signal)
       if (own.signal.aborted) return
@@ -176,7 +238,10 @@ export const useExplorationStore = defineStore('exploration', () => {
       const err = toApiError(e)
       if (err.code !== 'cancelled' && !own.signal.aborted) error.value = err
     } finally {
-      if (controller === own) controller = null
+      if (controller === own) {
+        controller = null
+        loadingViewport.value = false
+      }
     }
   }
 
@@ -187,6 +252,11 @@ export const useExplorationStore = defineStore('exploration', () => {
   async function reset(): Promise<void> {
     enabled.value = false
     paused.value = false
+    syncWakeLock()
+    wakeUnsub?.()
+    wakeUnsub = null
+    diagnostics.value = emptyDiagnostics()
+    backgroundStops.value = 0
     if (recentTimer) clearTimeout(recentTimer)
     recentTimer = null
     recent.value = new Map()
@@ -220,6 +290,9 @@ export const useExplorationStore = defineStore('exploration', () => {
     recentList,
     lastGain,
     error,
+    diagnostics,
+    backgroundStops,
+    screenKeptOn,
     enable,
     disable,
     toggle,
@@ -230,5 +303,8 @@ export const useExplorationStore = defineStore('exploration', () => {
     loadViewport,
     invalidate,
     reset,
+    latestExploredArea,
+    anyExploredIn,
+    loadingViewport,
   }
 })

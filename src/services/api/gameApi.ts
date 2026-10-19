@@ -343,6 +343,20 @@ export class GameApi implements CandidateMatcher {
     }
   }
 
+  /** The player's most recently explored cells, newest first (own rows only, RLS). */
+  async getRecentExploredCells(limit = 300): Promise<Cell[]> {
+    const data = await withRetry(() =>
+      unwrap(this.client.from('explored_cells').select('cell_y, cell_x').order('explored_at', { ascending: false }).limit(limit)),
+    )
+    return arr(data).map((row) => {
+      const o = obj(row, 'explored_cell')
+      const y = num(o, 'cell_y')
+      const x = num(o, 'cell_x')
+      if (!Number.isInteger(y) || !Number.isInteger(x)) throw new ApiError('invalid_response', 'explored_cell: expected integers')
+      return [y, x] as const
+    })
+  }
+
   /** The player's explored cells in the viewport (bbox span ≤ 0.2°). */
   async getExploredCells(bbox: Bbox, signal?: AbortSignal): Promise<ExploredCellsPage> {
     const data = await withRetry(() => {

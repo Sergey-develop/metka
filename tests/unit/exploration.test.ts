@@ -202,6 +202,24 @@ describe('GpsExplorationTracker', () => {
     expect(tracker.state).toMatchObject({ status: 'off', pending: 0, sync: 'saved' })
   })
 
+  it('diagnostics: fixes, client drops, gaps over 30 s, uploads and server verdicts', async () => {
+    const upload = vi.fn(async () => ({ accepted: 9, rejected: { too_fast: 1 }, newCells: [[1, 2] as const, [1, 3] as const], totalCells: 2 }))
+    const { tracker, send } = setup(upload)
+    await tracker.start()
+    send(0, 0, 60) // inaccurate
+    for (let i = 0; i < 10; i++) send(i * 12, i * 8)
+    send(9 * 12 + 3, 9 * 8 + 2) // 3 m in 2 s after the last accepted point: standing still
+    send(9 * 12 + 40, 9 * 8 + 47) // 47 s after the last accepted point, walking pace
+    await vi.runOnlyPendingTimersAsync()
+    const d = tracker.diagnostics
+    expect(d).toMatchObject({ fixes: 13, sent: 10, serverAccepted: 9, newCells: 2, uploadsOk: 1, uploadsFailed: 0, starts: 1, gapsOver30s: 1 })
+    expect(d.dropped).toMatchObject({ inaccurate: 1, too_close: 1 })
+    expect(d.serverRejected).toEqual({ too_fast: 1 })
+    expect(d.bestAccuracyM).toBe(8)
+    d.dropped.inaccurate = 99 // a copy: the tracker's counters are not affected
+    expect(tracker.diagnostics.dropped.inaccurate).toBe(1)
+  })
+
   it('stop() with a failing upload ends promptly and keeps the points for the next start', async () => {
     const upload = vi.fn(async (): Promise<ExplorationResult> => {
       throw new Error('Failed to fetch')
@@ -347,6 +365,34 @@ describe('exploration store', () => {
     expect(store).toMatchObject({ enabled: false, paused: false })
   })
 
+  it('keeps the screen on exactly while exploring (on and not paused), counts background stops', async () => {
+    installFakeServices()
+    const fake = {
+      state: { status: 'off' as const, accuracyM: null, pending: 0 },
+      diagnostics: undefined,
+      start: vi.fn(async () => undefined),
+      stop: vi.fn(async () => undefined),
+      onChange: vi.fn(() => () => undefined),
+      onResult: vi.fn(() => () => undefined),
+      onUploadError: vi.fn(() => () => undefined),
+    }
+    Object.assign(services(), { createExplorationTracker: () => fake })
+    const { keepOn, release } = vi.mocked(services().wakeLock)
+    const store = useExplorationStore()
+    await store.enable()
+    expect(keepOn).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(store.screenKeptOn).toBe(true))
+    await store.pauseByPlayer()
+    expect(release).toHaveBeenCalledTimes(1)
+    await store.resumeByPlayer()
+    expect(keepOn).toHaveBeenCalledTimes(2)
+    await store.pause() // app to background
+    expect(store.backgroundStops).toBe(1)
+    await store.disable()
+    expect(release).toHaveBeenCalledTimes(2)
+    await vi.waitFor(() => expect(store.screenKeptOn).toBe(false))
+  })
+
   it('highlights freshly revealed cells and the last gain for a few seconds', async () => {
     vi.useFakeTimers()
     try {
@@ -387,6 +433,47 @@ describe('exploration store', () => {
     await store.loadViewport({ minLng: 37.7, minLat: 55.7, maxLng: 37.72, maxLat: 55.71 }, 15) // same cells come back
     expect(getExploredCells).toHaveBeenCalledTimes(2)
     expect(store.cellList).toBe(first)
+  })
+
+  it('GameApi.getRecentExploredCells reads own cells newest first and validates them', async () => {
+    const { GameApi } = await import('@/services/api/gameApi')
+    const rows = { data: [{ cell_y: 1456534, cell_x: 1208997 }], error: null as unknown }
+    const query = {
+      select: vi.fn(() => query),
+      order: vi.fn(() => query),
+      limit: vi.fn(() => query),
+      then: (resolve: (v: unknown) => unknown) => Promise.resolve(rows).then(resolve),
+    }
+    const client = { from: vi.fn(() => query) }
+    const api = new GameApi(client as never)
+    expect(await api.getRecentExploredCells(50)).toEqual([[1456534, 1208997]])
+    expect(client.from).toHaveBeenCalledWith('explored_cells')
+    expect(query.order).toHaveBeenCalledWith('explored_at', { ascending: false })
+    expect(query.limit).toHaveBeenCalledWith(50)
+    rows.data = [{ cell_y: 1.5, cell_x: 2 }] as never
+    await expect(api.getRecentExploredCells()).rejects.toMatchObject({ code: 'invalid_response' })
+  })
+
+  it('"show explored": area around the newest cell, far older cells ignored; null when nothing is explored', async () => {
+    installFakeServices()
+    const getRecentExploredCells = vi.fn(async () => [] as (readonly [number, number])[])
+    Object.assign(services().api, { getRecentExploredCells })
+    const store = useExplorationStore()
+    expect(await store.latestExploredArea()).toBeNull()
+    getRecentExploredCells.mockResolvedValueOnce([
+      [1456534, 1208997],
+      [1456535, 1208998],
+      [1450000, 1200000], // an old walk far away
+    ])
+    const area = await store.latestExploredArea()
+    expect(area![0][0]).toBeCloseTo(1208997 * 0.00018 - 180, 9)
+    expect(area![1][1]).toBeCloseTo(1456536 * 0.0001 - 90, 9)
+    expect(store.cellList).toHaveLength(3) // merged: the fog opens there at once
+    const box = (lng: number, lat: number) => ({ minLng: lng - 0.001, minLat: lat - 0.001, maxLng: lng + 0.001, maxLat: lat + 0.001 })
+    expect(store.anyExploredIn(box(1208997 * 0.00018 - 180, 1456534 * 0.0001 - 90))).toBe(true)
+    expect(store.anyExploredIn(box(37.9, 55.9))).toBe(false)
+    getRecentExploredCells.mockRejectedValueOnce(new Error('offline'))
+    await expect(store.latestExploredArea()).rejects.toThrow()
   })
 
   it('loads explored cells for the viewport only when zoomed in', async () => {
