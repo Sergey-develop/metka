@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { cellKey, cellOf, type Cell } from '../../src/services/exploration/grid.ts'
+import { cellKey, cellOf, corridorCells, type Cell } from '../../src/services/exploration/grid.ts'
 import { createTestDb, SEED, type TestDb } from './harness'
 
 let t: TestDb
@@ -8,7 +8,6 @@ let t: TestDb
 // near metro Varshavskaya
 const LAT = 55.6534
 const LNG = 37.6196
-const M_PER_DEG_LAT = 111_320
 const mPerDegLng = (lat: number) => 111_320 * Math.cos((lat * Math.PI) / 180)
 
 interface Pt {
@@ -58,13 +57,9 @@ async function newUser(): Promise<string> {
   return id
 }
 
-/** cells the server should reveal for a straight segment, using the client grid */
+/** cells the server should reveal for a straight segment (8 m corridor), using the client grid */
 function expectedCells(a: Pt, b: Pt): Set<string> {
-  const d = Math.hypot((b.lat - a.lat) * M_PER_DEG_LAT, (b.lng - a.lng) * mPerDegLng(a.lat))
-  const n = Math.max(1, Math.ceil(d / 5))
-  const out = new Set<string>()
-  for (let i = 0; i <= n; i++) out.add(cellKey(cellOf(a.lat + ((b.lat - a.lat) * i) / n, a.lng + ((b.lng - a.lng) * i) / n)))
-  return out
+  return new Set(corridorCells(a, b).map(cellKey))
 }
 
 const keys = (cells: readonly Cell[]) => new Set(cells.map(cellKey))
@@ -77,7 +72,7 @@ describe('exploration grid parity', () => {
   it('SQL and TypeScript put points into the same cells', async () => {
     const points = Array.from({ length: 300 }, (_, i) => [55.1 + ((i * 7919) % 1000) / 909.1, 36.8 + ((i * 104729) % 1000) / 625.3])
     const r = await t.db.query<{ y: number; x: number }>(
-      `select floor((p.lat + 90) / 0.0002)::integer as y, floor((p.lng + 180) / 0.00036)::integer as x
+      `select floor((p.lat + 90) / 0.0001)::integer as y, floor((p.lng + 180) / 0.00018)::integer as x
        from jsonb_to_recordset($1::jsonb) as p(lat double precision, lng double precision)`,
       [JSON.stringify(points.map(([lat, lng]) => ({ lat, lng })))],
     )
@@ -134,7 +129,11 @@ describe('record_exploration', () => {
       { lat: LAT, lng: LNG + 0.0002, accuracy: 5, t: now - 20_000 }, // back on track, 12.5 m in 10 s
     ])
     expect(r.rejected).toEqual({ too_fast: 1 })
-    expect(r.newCells.every(([y]) => y === cellOf(LAT, LNG)[0])).toBe(true) // nothing towards the jump
+    // nothing towards the jump (50 rows north): only the 8 m corridor around the east-west walk,
+    // i.e. at most one 11 m row either side of the start row
+    const startRow = cellOf(LAT, LNG)[0]
+    expect(r.newCells.length).toBeGreaterThan(0)
+    expect(r.newCells.every(([y]) => Math.abs(y - startRow) <= 1)).toBe(true)
   })
 
   it('does not draw a line across a pause, and re-anchors after a long one (bus, metro)', async () => {

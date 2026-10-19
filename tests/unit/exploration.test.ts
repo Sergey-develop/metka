@@ -15,15 +15,15 @@ const mPerDegLng = 111_320 * Math.cos((LAT * Math.PI) / 180)
 const fix = (eastM: number, tSec: number, accuracyM = 8): GeoFix => ({ lat: LAT, lng: LNG + eastM / mPerDegLng, accuracyM, timestamp: 1_000_000 + tSec * 1000 })
 
 describe('exploration grid', () => {
-  it('maps points to ~22 m cells and back', () => {
-    const [lat, lng] = [LAT + 0.00007, LNG + 0.0001] // inside a cell, not on a boundary
+  it('maps points to ~11 m cells and back', () => {
+    const [lat, lng] = [LAT + 0.00003, LNG + 0.00005] // inside a cell, not on a boundary
     const [minLng, minLat, maxLng, maxLat] = cellBounds(cellOf(lat, lng))
     expect(lng).toBeGreaterThan(minLng)
     expect(lng).toBeLessThan(maxLng)
     expect(lat).toBeGreaterThan(minLat)
     expect(lat).toBeLessThan(maxLat)
-    expect(CELL_LAT_DEG * 111_320).toBeCloseTo(22.3, 0)
-    expect(CELL_LNG_DEG * mPerDegLng).toBeCloseTo(22.6, 0)
+    expect(CELL_LAT_DEG * 111_320).toBeCloseTo(11.1, 0)
+    expect(CELL_LNG_DEG * mPerDegLng).toBeCloseTo(11.3, 0)
   })
 
   it('merges horizontal runs into rectangles', () => {

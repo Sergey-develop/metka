@@ -71,24 +71,35 @@ export interface TestDb {
   asUser: <T>(userId: string | null, fn: (tx: Transaction) => Promise<T>) => Promise<T>
   /** server-side tooling (importer) runs with the service role key */
   asServiceRole: <T>(fn: (tx: Transaction) => Promise<T>) => Promise<T>
+  /** with `stopBefore`: applies the migrations that were held back (data-migration tests) */
+  applyRemainingMigrations: () => Promise<void>
 }
 
-export async function createTestDb(options: { seed?: boolean } = {}): Promise<TestDb> {
+export async function createTestDb(options: { seed?: boolean; stopBefore?: string } = {}): Promise<TestDb> {
   const db = await PGlite.create({ extensions: { vector, postgis, pgcrypto } })
   await db.exec(SUPABASE_BOOTSTRAP)
 
   const migrationsDir = join(root, 'supabase/migrations')
-  for (const file of readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort()) {
+  const files = readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort()
+  const cut = options.stopBefore ? files.findIndex((f) => f.startsWith(options.stopBefore!)) : -1
+  if (options.stopBefore && cut < 0) throw new Error(`no migration ${options.stopBefore}`)
+  const held = cut >= 0 ? files.slice(cut) : []
+  for (const file of cut >= 0 ? files.slice(0, cut) : files) {
     await db.exec(readFileSync(join(migrationsDir, file), 'utf8'))
   }
   if (options.seed) {
     await db.exec(readFileSync(join(root, 'supabase/seed.sql'), 'utf8'))
   }
   // grant extension functions to client roles (Supabase does this on install)
-  await db.exec(`grant execute on all functions in schema extensions to anon, authenticated, service_role;`)
+  const grantExtensions = () => db.exec(`grant execute on all functions in schema extensions to anon, authenticated, service_role;`)
+  await grantExtensions()
 
   return {
     db,
+    async applyRemainingMigrations() {
+      for (const file of held.splice(0)) await db.exec(readFileSync(join(migrationsDir, file), 'utf8'))
+      await grantExtensions()
+    },
     async createUser(id, username) {
       await db.query(`insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3)`, [
         id,

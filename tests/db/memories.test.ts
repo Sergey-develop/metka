@@ -130,14 +130,14 @@ describe('player_progress', () => {
     await save(u, SEED.gum.id, { favorite: true })
     await save(u, SEED.tsum.id, { favorite: false })
 
-    // 49 cells in the centre (ЦАО), then 1 more: the okrug counts only at 50
-    const y0 = Math.floor((SEED.gum.lat + 90) / 0.0002)
-    const x0 = Math.floor((SEED.gum.lng + 180) / 0.00036)
+    // 129 cells in the centre (ЦАО), then 1 more: the okrug counts only at 130 (≈1 km, migration 013)
+    const y0 = Math.floor((SEED.gum.lat + 90) / 0.0001)
+    const x0 = Math.floor((SEED.gum.lng + 180) / 0.00018)
     const cells = (n: number, from = 0) => Array.from({ length: n }, (_, i) => `('${u}', ${y0}, ${x0 + from + i})`).join(',')
-    await t.db.query(`insert into public.explored_cells (user_id, cell_y, cell_x) values ${cells(49)}`)
-    expect(await progress(u)).toMatchObject({ exploredCells: 49, exploredDistricts: 0, unlockedBuildings: 2, memories: 2, favoritePlaces: 1 })
-    await t.db.query(`insert into public.explored_cells (user_id, cell_y, cell_x) values ${cells(1, 49)}`)
-    expect(await progress(u)).toMatchObject({ exploredCells: 50, exploredDistricts: 1 })
+    await t.db.query(`insert into public.explored_cells (user_id, cell_y, cell_x) values ${cells(129)}`)
+    expect(await progress(u)).toMatchObject({ exploredCells: 129, exploredDistricts: 0, unlockedBuildings: 2, memories: 2, favoritePlaces: 1 })
+    await t.db.query(`insert into public.explored_cells (user_id, cell_y, cell_x) values ${cells(1, 129)}`)
+    expect(await progress(u)).toMatchObject({ exploredCells: 130, exploredDistricts: 1, districtMinCells: 130 })
   })
 })
 
