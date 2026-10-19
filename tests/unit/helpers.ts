@@ -90,6 +90,8 @@ export function installFakeServices(): FakeServices {
     claimQuest: vi.fn(),
     isLocationScanTester: vi.fn(async () => false),
     setDiscoveryPhoto: vi.fn(async () => undefined),
+    getBuildingFacts: vi.fn(),
+    getBuildingOrganizations: vi.fn(async () => []),
   }
   const services = {
     config: CONFIG,
@@ -97,6 +99,8 @@ export function installFakeServices(): FakeServices {
     api: api as unknown as GameApi,
     auth: {} as AppServices['auth'],
     camera,
+    cameraPreview: { isSupported: () => true, start: vi.fn(async () => ({ stop: vi.fn() })) },
+    orientation: { isSupported: () => true, requestPermission: vi.fn(async () => 'granted' as const), watchHeading: vi.fn(() => () => undefined) },
     geolocation,
     recognition,
     lifecycle: { onActiveChange: () => () => undefined, onDeepLink: () => () => undefined },

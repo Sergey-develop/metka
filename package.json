@@ -16,7 +16,9 @@
     "test:db": "vitest run --project db",
     "cap:sync": "npm run build && cap sync",
     "osm:fetch": "node --experimental-strip-types tools/osm-import/fetch-overpass.ts",
-    "osm:import": "node --experimental-strip-types tools/osm-import/import.ts"
+    "osm:import": "node --experimental-strip-types tools/osm-import/import.ts",
+    "osm:fetch-pois": "node --experimental-strip-types tools/osm-import/fetch-pois.ts",
+    "osm:import-pois": "node --experimental-strip-types tools/osm-import/import-pois.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",

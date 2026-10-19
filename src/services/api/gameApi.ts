@@ -2,12 +2,15 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ExplorationResult } from '../exploration/explorationTracker'
 import type { Cell } from '../exploration/grid'
 import type { TrackPoint } from '../exploration/trackFilter'
+import { factsFromOsm, organizationFromOsm } from '../buildings/buildingFacts'
 import type { CandidateMatcher, RecognitionCandidate } from '../recognition/types'
 import {
   AVATAR_KEYS,
   type AdminGameInfo,
   type AvatarKey,
   type Bbox,
+  type BuildingFacts,
+  type BuildingOrganization,
   type BuildingOutline,
   type GameBuildingDraft,
   type GameBuildingStatus,
@@ -282,6 +285,51 @@ export class GameApi implements CandidateMatcher {
   async getBuildingOutlines(bbox: Bbox, zoom: number, signal?: AbortSignal): Promise<OutlinesPage> {
     const data = await this.outlinesRpc('osm_buildings_in_bbox', bbox, zoom, signal)
     return parseOutlinesPage(data, (o) => parseGameInfo(o))
+  }
+
+  /** Card facts of one OSM building (osm_buildings is readable by signed-in players, RLS). */
+  async getBuildingFacts(osmBuildingId: number, signal?: AbortSignal): Promise<BuildingFacts> {
+    const data = await withRetry(() => {
+      if (signal?.aborted) throw new ApiError('cancelled')
+      const request = this.client
+        .from('osm_buildings')
+        .select('id, osm_type, osm_id, name, address, tags, updated_at')
+        .eq('id', osmBuildingId)
+      return unwrap((signal ? request.abortSignal(signal) : request).maybeSingle())
+    })
+    if (data === null) throw new ApiError('not_found', 'osm building not found')
+    const o = obj(data, 'osm_building')
+    const tags = o.tags !== null && typeof o.tags === 'object' && !Array.isArray(o.tags) ? (o.tags as Json) : {}
+    return factsFromOsm({
+      id: num(o, 'id'),
+      osm_type: oneOf(o, 'osm_type', ['node', 'way', 'relation'] as const),
+      osm_id: num(o, 'osm_id'),
+      name: strOrNull(o, 'name'),
+      address: strOrNull(o, 'address'),
+      tags,
+      updated_at: str(o, 'updated_at'),
+    })
+  }
+
+  /** Organisations linked to an OSM building (osm_pois, migration 012; only proven links). */
+  async getBuildingOrganizations(osmBuildingId: number): Promise<BuildingOrganization[]> {
+    const data = await withRetry(() =>
+      unwrap(
+        this.client
+          .from('osm_pois')
+          .select('id, name, kind_key, kind_value, tags, link_method')
+          .eq('osm_building_id', osmBuildingId)
+          .order('name')
+          .limit(100),
+      ),
+    )
+    return arr(data).flatMap((row) => {
+      const o = obj(row, 'osm_poi')
+      const link = o.link_method
+      if (link !== 'explicit' && link !== 'inside_footprint') return []
+      const tags = o.tags !== null && typeof o.tags === 'object' && !Array.isArray(o.tags) ? (o.tags as Json) : {}
+      return [organizationFromOsm({ id: num(o, 'id'), name: str(o, 'name'), kindValue: str(o, 'kind_value'), tags, link })]
+    })
   }
 
   /** Sends filtered GPS fixes; the server derives and stores explored cells. Not retried here. */

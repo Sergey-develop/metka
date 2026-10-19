@@ -308,6 +308,15 @@ onBeforeUnmount(() => {
       Исследование
     </button>
 
+    <RouterLink
+      v-if="!map.selectedBuilding && !map.selectedDistrict && !outlines.selected"
+      to="/scan"
+      class="ar-scan"
+      aria-label="Сканировать здание камерой"
+    >
+      <AppIcon name="camera" />
+    </RouterLink>
+
     <button
       v-if="!map.selectedBuilding && !map.selectedDistrict && !outlines.selected"
       class="locate"
@@ -556,6 +565,20 @@ onBeforeUnmount(() => {
   color: var(--c-accent);
 }
 
+.ar-scan {
+  position: absolute;
+  right: 16px;
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + 156px);
+  z-index: 5;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--c-accent);
+  box-shadow: var(--shadow-card);
+  display: grid;
+  place-items: center;
+  color: #fff;
+}
 .explore {
   position: absolute;
   right: 16px;

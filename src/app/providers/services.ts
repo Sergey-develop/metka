@@ -5,6 +5,7 @@ import { GameApi } from '@/services/api/gameApi'
 import { AuthService } from '@/services/auth/authService'
 import { createSupabaseClient } from '@/services/auth/supabaseClient'
 import { CapacitorCameraService } from '@/services/camera/capacitorCamera'
+import { MediaDevicesCameraPreview, type CameraPreviewService } from '@/services/camera/preview'
 import type { CameraService } from '@/services/camera/types'
 import { WebCameraService } from '@/services/camera/webCamera'
 import { CapacitorGeolocationService } from '@/services/geolocation/capacitorGeolocation'
@@ -14,6 +15,8 @@ import { GpsExplorationTracker, type ExplorationTracker } from '@/services/explo
 import { PreferencesPendingPointStore } from '@/services/exploration/pendingPointStore'
 import { SupabaseMemoriesService, type MemoriesService } from '@/services/memories/memoriesService'
 import type { MapService } from '@/services/map/types'
+import { DeviceOrientationService } from '@/services/orientation/deviceOrientation'
+import type { OrientationService } from '@/services/orientation/types'
 import { prepareMemoryPhoto } from '@/utils/avatarImage'
 import { loadYandexMaps } from '@/services/map/yandexLoader'
 import { YandexMapService } from '@/services/map/yandexMap'
@@ -28,6 +31,10 @@ export interface AppServices {
   api: GameApi
   auth: AuthService
   camera: CameraService
+  /** live rear-camera feed for the /scan screen */
+  cameraPreview: CameraPreviewService
+  /** compass heading of the rear camera */
+  orientation: OrientationService
   geolocation: GeolocationService
   recognition: BuildingRecognitionService
   lifecycle: AppLifecycleService
@@ -70,6 +77,8 @@ export async function createServices(config: AppConfig): Promise<AppServices> {
     lifecycle: new CapacitorAppLifecycle(),
     memories: new SupabaseMemoriesService(supabase, prepareMemoryPhoto),
     createMap: () => new YandexMapService(() => loadYandexMaps(config.yandexMapsApiKey)),
+    cameraPreview: new MediaDevicesCameraPreview(),
+    orientation: new DeviceOrientationService(),
   }
 
   // `import.meta.env.DEV` is statically false in production builds, so the

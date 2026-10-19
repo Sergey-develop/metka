@@ -62,6 +62,46 @@ export interface BuildingOutline<G extends OutlineGameInfo = OutlineGameInfo> {
   game: G | null
 }
 
+/**
+ * Facts about one OSM building for the info card. Every field comes from OSM tags or the game
+ * catalog as stored; null means "not in the data", never a guess.
+ */
+export interface BuildingFacts {
+  osmBuildingId: number
+  osmType: 'node' | 'way' | 'relation'
+  osmId: number
+  name: string | null
+  address: string | null
+  /** human label of the building type ("Жилой дом", "Школа"), null when OSM only says building=yes */
+  kind: string | null
+  levels: number | null
+  /** OSM start_date as written (a year or a date) */
+  built: string | null
+  /** standard design series (design:ref), e.g. "П44-1/17" */
+  series: string | null
+  flats: number | null
+  /** contacts/hours tagged on the building itself (when the building is the organisation) */
+  openingHours: string | null
+  phone: string | null
+  website: string | null
+  wikidataId: string | null
+  /** last import that changed this building's data */
+  updatedAt: string
+}
+
+/** An organisation located in a building (osm_pois, linked only by footprint or explicit tag). */
+export interface BuildingOrganization {
+  id: number
+  name: string
+  /** human label ("Кафе", "Аптека") or null when the OSM kind is unknown to us */
+  kind: string | null
+  openingHours: string | null
+  phone: string | null
+  website: string | null
+  /** how the link to the building was established */
+  link: 'inside_footprint' | 'explicit'
+}
+
 export interface OutlinesPage<G extends OutlineGameInfo = OutlineGameInfo> {
   features: BuildingOutline<G>[]
   /** server dropped plain footprints to stay under the limit (game buildings are always kept) */

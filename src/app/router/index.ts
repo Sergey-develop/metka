@@ -59,6 +59,13 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
+    // camera-first: which building is in front of the camera (approximate, GPS + compass + OSM)
+    path: '/scan',
+    name: 'ar-scan',
+    component: () => import('@/features/scanner/ArScanView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/scan/:buildingId',
     name: 'scan',
     component: () => import('@/features/scanner/ScannerView.vue'),
