@@ -6,7 +6,7 @@ import { CELL_LAT_DEG, CELL_LNG_DEG, cellBounds, cellOf, cellsToMultiPolygon, ty
 import { TrackFilter, type TrackPoint } from '@/services/exploration/trackFilter'
 import { GeolocationError, type GeoFix, type GeolocationService } from '@/services/geolocation/types'
 import { MockGeolocationService } from '@/mocks'
-import { useExplorationStore } from '@/stores/exploration'
+import { RECENT_MS, useExplorationStore } from '@/stores/exploration'
 import { installFakeServices } from './helpers'
 
 const LAT = 55.6534
@@ -181,6 +181,39 @@ describe('GpsExplorationTracker', () => {
     send(24, 16)
     expect(tracker.state.pending).toBe(0)
   })
+
+  it('stop() during an upload waits for it and then sends the points that arrived meanwhile', async () => {
+    let release: () => void = () => undefined
+    const upload = vi
+      .fn<(points: TrackPoint[]) => Promise<ExplorationResult>>()
+      .mockImplementationOnce(() => new Promise((r) => (release = () => r(ok()))))
+      .mockImplementation(async () => ok())
+    const { tracker, send, watchers } = setup(upload)
+    await tracker.start()
+    for (let i = 0; i < 10; i++) send(i * 12, i * 8) // a full batch: upload starts
+    send(10 * 12, 10 * 8) // arrives while the first upload is running
+    send(11 * 12, 11 * 8)
+    const stopping = tracker.stop()
+    expect(watchers).toHaveLength(0) // GPS released at once
+    release()
+    await stopping
+    expect(upload).toHaveBeenCalledTimes(2)
+    expect((upload.mock.calls[1] as unknown as [TrackPoint[]])[0]).toHaveLength(2)
+    expect(tracker.state).toMatchObject({ status: 'off', pending: 0, sync: 'saved' })
+  })
+
+  it('stop() with a failing upload ends promptly and keeps the points for the next start', async () => {
+    const upload = vi.fn(async (): Promise<ExplorationResult> => {
+      throw new Error('Failed to fetch')
+    })
+    const { tracker, send } = setup(upload)
+    await tracker.start()
+    send(0, 0)
+    send(12, 8)
+    await tracker.stop()
+    expect(upload).toHaveBeenCalledTimes(1) // no retry loop on failure
+    expect(tracker.state).toMatchObject({ status: 'off', pending: 2 })
+  })
 })
 
 describe('GpsExplorationTracker persistence and sync state', () => {
@@ -283,6 +316,77 @@ describe('exploration store', () => {
     expect(store.enabled).toBe(false)
     await store.resume()
     expect(fake.start).toHaveBeenCalledTimes(2) // not resumed
+  })
+
+  it('player pause: GPS off, survives background/foreground, resumes only on request', async () => {
+    installFakeServices()
+    const fake = {
+      state: { status: 'off' as const, accuracyM: null, pending: 0 },
+      start: vi.fn(async () => undefined),
+      stop: vi.fn(async () => undefined),
+      onChange: vi.fn(() => () => undefined),
+      onResult: vi.fn(() => () => undefined),
+      onUploadError: vi.fn(() => () => undefined),
+    }
+    Object.assign(services(), { createExplorationTracker: () => fake })
+    const store = useExplorationStore()
+    await store.pauseByPlayer() // not enabled: nothing to pause
+    expect(store.paused).toBe(false)
+    await store.enable()
+    await store.pauseByPlayer()
+    expect(store).toMatchObject({ enabled: true, paused: true })
+    expect(fake.stop).toHaveBeenCalledTimes(1)
+    await store.pause() // app to background
+    await store.resume() // back to foreground: stays paused
+    expect(fake.start).toHaveBeenCalledTimes(1)
+    await store.resumeByPlayer()
+    expect(store.paused).toBe(false)
+    expect(fake.start).toHaveBeenCalledTimes(2)
+    await store.pauseByPlayer()
+    await store.disable() // switching off clears the pause
+    expect(store).toMatchObject({ enabled: false, paused: false })
+  })
+
+  it('highlights freshly revealed cells and the last gain for a few seconds', async () => {
+    vi.useFakeTimers()
+    try {
+      installFakeServices()
+      let resultListener: ((r: ExplorationResult) => void) | null = null
+      const fake = {
+        state: { status: 'off' as const, accuracyM: null, pending: 0 },
+        start: vi.fn(async () => undefined),
+        stop: vi.fn(async () => undefined),
+        onChange: vi.fn(() => () => undefined),
+        onResult: vi.fn((l) => ((resultListener = l), () => undefined)),
+        onUploadError: vi.fn(() => () => undefined),
+      }
+      Object.assign(services(), { createExplorationTracker: () => fake })
+      const store = useExplorationStore()
+      await store.enable()
+      resultListener!(ok([[1, 2], [1, 3]], 2))
+      expect(store.recentList).toHaveLength(2)
+      expect(store.lastGain?.count).toBe(2)
+      resultListener!(ok([], 2)) // nothing new: no notice change
+      expect(store.lastGain?.count).toBe(2)
+      vi.advanceTimersByTime(RECENT_MS + 1500)
+      expect(store.recentList).toEqual([])
+      expect(store.lastGain).toBeNull()
+      expect(store.cellList).toHaveLength(2) // explored cells stay
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('re-loading known cells does not create a new cell list (no fog rebuild on map moves)', async () => {
+    installFakeServices()
+    const getExploredCells = vi.fn(async () => ({ cells: [[5, 6] as const, [5, 7] as const], truncated: false, totalCells: 2 }))
+    Object.assign(services().api, { getExploredCells })
+    const store = useExplorationStore()
+    await store.loadViewport({ minLng: 37.61, minLat: 55.65, maxLng: 37.63, maxLat: 55.66 }, 15)
+    const first = store.cellList
+    await store.loadViewport({ minLng: 37.7, minLat: 55.7, maxLng: 37.72, maxLat: 55.71 }, 15) // same cells come back
+    expect(getExploredCells).toHaveBeenCalledTimes(2)
+    expect(store.cellList).toBe(first)
   })
 
   it('loads explored cells for the viewport only when zoomed in', async () => {

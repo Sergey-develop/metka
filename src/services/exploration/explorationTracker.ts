@@ -127,12 +127,21 @@ export class GpsExplorationTracker implements ExplorationTracker {
     this.ticker = setInterval(() => this.tick(), 5_000)
   }
 
+  /**
+   * Stops GPS and uploads what is buffered before resolving. If an upload was already running, or
+   * more than one batch is waiting, it keeps going until the buffer is empty or an upload fails
+   * (failed points stay stored for the next start).
+   */
   async stop(): Promise<void> {
     this.running = false
     this.release()
     this.filter.reset()
     this.setStatus('off')
-    await this.flush()
+    for (let i = 0; i < 4 && this.buffer.length > 0; i++) {
+      const before = this.buffer.length
+      await this.flush()
+      if (this.sync !== 'saved' || this.buffer.length >= before) break
+    }
   }
 
   onChange(listener: (state: TrackerState) => void): () => void {

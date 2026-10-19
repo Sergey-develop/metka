@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MapLoadError, type MapScene, type MapTarget, type MapViewport } from '@/services/map/types'
 import { loadYandexMaps, resetYandexLoader, type YmapsApi } from '@/services/map/yandexLoader'
-import { outlineStyle, targetOf, toYandexGeometry, YandexMapService } from '@/services/map/yandexMap'
+import { cellKey, cellOf } from '@/services/exploration/grid'
+import { outlineStyle, revealedBy, targetOf, toYandexGeometry, YandexMapService } from '@/services/map/yandexMap'
 import type { BuildingOutline, DistrictOverview, OutlineGameInfo } from '@/types/game'
 import { BUILDING } from './helpers'
 
@@ -123,6 +124,8 @@ function scene(over: Partial<MapScene> = {}): MapScene {
     selectedOutlineId: null,
     position: null,
     exploredCells: [],
+    recentCells: [],
+    fog: false,
     ...over,
   }
 }
@@ -333,6 +336,89 @@ describe('YandexMapService', () => {
     expect((explored()!.props.geometry as { coordinates: unknown[] }).coordinates).toHaveLength(1) // merged run
     service.render(scene({ exploredCells: [] }))
     expect(explored()).toBeUndefined()
+  })
+
+  it('Fog of War: one fog feature above our features, explored cells are holes, the player stays on top', async () => {
+    vi.useFakeTimers()
+    const { service, map } = await mounted()
+    const layers = map.of(FakeCustomLayer).map((l) => l.props as { source: string; type: string; zIndex: number })
+    const fogLayer = layers.find((l) => l.source === 'metka-fog')!
+    const topMarkers = layers.find((l) => l.type === 'markers')!
+    // measured in headless Edge: 1550 covers basemap labels and the default features layer (1500)
+    expect(fogLayer).toMatchObject({ type: 'features', zIndex: 1550 })
+    expect(topMarkers.zIndex).toBeGreaterThan(fogLayer.zIndex)
+    const fog = () => map.of(FakeFeature).find((f) => f.props.id === 'fog')
+    const cells = [
+      [1456534, 1208997],
+      [1456534, 1208998],
+    ] as const
+    const position = { lat: 55.6534, lng: 37.6196, accuracyM: 10, timestamp: 0 }
+    service.render(scene({ fog: true, exploredCells: cells, position }))
+    const f = fog()!
+    expect(f.props.source).toBe('metka-fog')
+    const coords = (f.props.geometry as { coordinates: unknown[][] }).coordinates
+    expect(coords).toHaveLength(1) // one fog polygon …
+    expect(coords[0]).toHaveLength(2) // … with one merged hole
+    // no tint over explored land when the fog is on
+    expect(map.of(FakeFeature).some((x) => x.props.id === 'explored')).toBe(false)
+    // tapping the fog selects nothing (footprints under it cannot be opened)
+    expect(targetOf(f.properties)).toBeNull()
+    // the player: dot in the top markers layer, halo in the top features layer
+    const dot = map.of(FakeMarker).find((m) => m.element.className === 'metka-me')!
+    expect(dot.props.source).toBe(topMarkers.source)
+    expect(map.of(FakeFeature).some((x) => x.props.source === 'metka-top')).toBe(true)
+
+    // same cells → no rebuild; new cells → one update of the same feature
+    service.render(scene({ fog: true, exploredCells: cells, position: { ...position, accuracyM: 12 } }))
+    expect(f.updates).toBe(0)
+    service.render(scene({ fog: true, exploredCells: [...cells, [1456535, 1208997]], position }))
+    expect(f.updates).toBe(1)
+    expect(fog()).toBe(f)
+
+    // city view: the okrug board instead of fog; back at street level the fog returns
+    const { onUpdate } = listenerOf(map)
+    onUpdate({ location: { zoom: 10 } })
+    expect(fog()).toBeUndefined()
+    onUpdate({ location: { zoom: 15 } })
+    vi.advanceTimersByTime(1000)
+    expect(fog()).toBeDefined()
+
+    service.render(scene({ fog: false, exploredCells: cells }))
+    expect(fog()).toBeUndefined()
+    expect(map.of(FakeFeature).some((x) => x.props.id === 'explored')).toBe(true)
+  })
+
+  it('with the fog on, taps never select footprints or game points on unexplored land', async () => {
+    const { service, map } = await mounted()
+    const picked: MapTarget[] = []
+    service.onSelect((t) => picked.push(t))
+    const { onClick } = listenerOf(map)
+    // outline(1) lies at lng 37.611…37.612, lat 55.650…55.651; BUILDING is the game point
+    const [y, x] = cellOf(55.65, 37.611)
+    service.render(scene({ fog: true, exploredCells: [] }))
+    onClick({ entity: { properties: { kind: 'outline', id: 1 } } })
+    onClick({ entity: { properties: { kind: 'building', id: BUILDING.id } } })
+    onClick({ entity: { properties: { kind: 'district', id: 'd1' } } })
+    onClick({ entity: { properties: { kind: 'fog' } } })
+    expect(picked).toEqual([null, null, { kind: 'district', id: 'd1' }, null])
+    picked.length = 0
+    service.render(scene({ fog: true, exploredCells: [[y, x]] })) // one corner of the footprint explored
+    onClick({ entity: { properties: { kind: 'outline', id: 1 } } })
+    onClick({ entity: { properties: { kind: 'outline', id: 2 } } }) // still in the fog
+    expect(picked).toEqual([{ kind: 'outline', id: 1 }, null])
+    picked.length = 0
+    service.render(scene({ fog: false, exploredCells: [] })) // fog lifted (admin)
+    onClick({ entity: { properties: { kind: 'outline', id: 2 } } })
+    expect(picked).toEqual([{ kind: 'outline', id: 2 }])
+  })
+
+  it('revealedBy: any vertex of a footprint, or the point itself, in an explored cell', () => {
+    const [y, x] = cellOf(55.65, 37.611)
+    const explored = new Set([cellKey([y, x])])
+    expect(revealedBy(square(37.611), explored)).toBe(true)
+    expect(revealedBy(square(37.62), explored)).toBe(false)
+    expect(revealedBy({ type: 'Point', coordinates: [37.611, 55.65] }, explored)).toBe(true)
+    expect(revealedBy({ type: 'Point', coordinates: [37.62, 55.65] }, explored)).toBe(false)
   })
 
   it('toggles zoom classes for DOM markers', async () => {

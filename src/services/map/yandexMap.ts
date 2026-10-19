@@ -12,7 +12,8 @@ import type {
   YMapMarker,
 } from '@yandex/ymaps3-types'
 import type { BuildingOutline, DistrictOverview, MapBuilding, Rarity } from '@/types/game'
-import { cellsToMultiPolygon, type Cell } from '@/services/exploration/grid'
+import { fogGeometry } from '@/services/exploration/fog'
+import { cellKey, cellOf, cellsToMultiPolygon, type Cell } from '@/services/exploration/grid'
 import { containsPoint, labelPoint, toLngLat } from '@/utils/mapGeometry'
 import type { YmapsApi } from './yandexLoader'
 import type { LngLatPair, MapInit, MapScene, MapService, MapTarget, MapViewport } from './types'
@@ -26,7 +27,11 @@ export const MAP_COLORS = {
   districtSelected: '#9FD1F9',
   plainStroke: '#8E97AB',
   unavailable: '#B9BCC8',
+  /** Fog of War over unexplored land */
+  fog: '#D9DCE6',
 } as const
+
+const NO_CELLS: readonly Cell[] = []
 
 const RARITY_COLORS: Record<Rarity, string> = {
   common: '#8E97AB',
@@ -63,6 +68,21 @@ const MIN_ZOOM = 9.5
  */
 const EXPLORED_SOURCE = 'metka-explored'
 const EXPLORED_Z_INDEX = 1450
+/**
+ * Fog of War. Measured in headless Edge against JS API 3.0 (2026-10-19): a fill in a features layer
+ * above the scheme sublayers (ground 1000, buildings 1100, icons 1200, labels 1300) hides basemap
+ * labels and icons too; at 1550 it also covers the default features layer (1500: footprints,
+ * districts) and its DOM markers. Custom (raster) layers are not allowed with our key. So the fog
+ * sits at 1550 and what must stay visible on top of it — the player — lives in TOP layers above.
+ */
+const FOG_SOURCE = 'metka-fog'
+const FOG_Z_INDEX = 1550
+const TOP_SOURCE = 'metka-top'
+const TOP_FEATURES_Z_INDEX = 1600
+const TOP_MARKERS_SOURCE = 'metka-top-markers'
+const TOP_MARKERS_Z_INDEX = 1700
+/** the fogged area: the game area (Moscow incl. New Moscow), same as MAP_AREA */
+const FOG_AREA = [36.8, 55.1, 38.4, 56.2] as const
 const VIEWPORT_SETTLE_MS = 200
 /** Longer than pauses inside a wheel/trackpad zoom, so the basemap is not shown mid-gesture. */
 const BASEMAP_SETTLE_MS = 450
@@ -77,6 +97,17 @@ const SCHEME_CUSTOMIZATION = {
 }
 
 type Props = Exclude<MapTarget, null>
+
+/**
+ * Is any part of the object on explored land? A footprint counts as revealed when one of its
+ * vertices (or a node building's point) lies in an explored cell; a game point by its position.
+ */
+export function revealedBy(geometry: BuildingOutline['geometry'] | GeoJSON.Point, explored: ReadonlySet<string>): boolean {
+  const hit = (p: GeoJSON.Position) => explored.has(cellKey(cellOf(p[1] ?? 0, p[0] ?? 0)))
+  if (geometry.type === 'Point') return hit(geometry.coordinates)
+  const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates
+  return polygons.some((poly) => poly.some((ring) => ring.some(hit)))
+}
 
 /** Reads back what we stored in an entity's `properties` (untyped in the Yandex API). */
 export function targetOf(properties: Record<string, unknown> | undefined): MapTarget {
@@ -190,6 +221,8 @@ export class YandexMapService implements MapService {
   private percentPin: { marker: YMapMarker; key: string } | null = null
   private me: { dot: YMapMarker; halo: YMapFeature } | null = null
   private explored: { feature: YMapFeature; cells: readonly Cell[] } | null = null
+  private recent: { feature: YMapFeature; cells: readonly Cell[] } | null = null
+  private fog: { feature: YMapFeature; cells: readonly Cell[]; explored: Set<string> } | null = null
 
   constructor(private readonly loadApi: () => Promise<YmapsApi>) {}
 
@@ -213,9 +246,15 @@ export class YandexMapService implements MapService {
     map.addChild(new api.YMapDefaultFeaturesLayer({}))
     map.addChild(new api.YMapFeatureDataSource({ id: EXPLORED_SOURCE }))
     map.addChild(new api.YMapLayer({ source: EXPLORED_SOURCE, type: 'features', zIndex: EXPLORED_Z_INDEX }))
+    map.addChild(new api.YMapFeatureDataSource({ id: FOG_SOURCE }))
+    map.addChild(new api.YMapLayer({ source: FOG_SOURCE, type: 'features', zIndex: FOG_Z_INDEX }))
+    map.addChild(new api.YMapFeatureDataSource({ id: TOP_SOURCE }))
+    map.addChild(new api.YMapLayer({ source: TOP_SOURCE, type: 'features', zIndex: TOP_FEATURES_Z_INDEX }))
+    map.addChild(new api.YMapFeatureDataSource({ id: TOP_MARKERS_SOURCE }))
+    map.addChild(new api.YMapLayer({ source: TOP_MARKERS_SOURCE, type: 'markers', zIndex: TOP_MARKERS_Z_INDEX }))
     this.listener = new api.YMapListener({
       layer: 'any',
-      onClick: (object) => this.selectHandler?.(targetOf(object?.entity.properties)),
+      onClick: (object) => this.selectHandler?.(this.unlessFogged(targetOf(object?.entity.properties))),
       onUpdate: ({ location }) => {
         this.setZoom(location.zoom)
         this.scheduleViewport()
@@ -272,6 +311,8 @@ export class YandexMapService implements MapService {
     this.renderPoints(scene)
     this.renderPosition(scene)
     this.renderExplored(scene)
+    this.renderRecent(scene)
+    this.renderFog(scene)
   }
 
   destroy(): void {
@@ -289,12 +330,28 @@ export class YandexMapService implements MapService {
     this.percentPin = null
     this.me = null
     this.explored = null
+    this.recent = null
+    this.fog = null
     this.listener = null
     this.scheme = null
     this.map?.destroy()
     this.map = null
     this.api = null
     this.scene = null
+  }
+
+  /**
+   * Defence in depth: with the fog on, a tap never selects a footprint or game point on unexplored
+   * land, whichever object the engine reports under the finger. (Districts belong to the board.)
+   */
+  private unlessFogged(target: MapTarget): MapTarget {
+    if (!this.fog || !target || target.kind === 'district') return target
+    if (target.kind === 'outline') {
+      const drawn = this.outlines.get(target.id)
+      return drawn && revealedBy(drawn.source.geometry, this.fog.explored) ? target : null
+    }
+    const point = this.points.get(target.id)?.source
+    return point && revealedBy({ type: 'Point', coordinates: [point.lng, point.lat] }, this.fog.explored) ? target : null
   }
 
   /** For tests and diagnostics. */
@@ -327,6 +384,8 @@ export class YandexMapService implements MapService {
     if (!this.scheme || this.basemapVisible === visible) return
     this.basemapVisible = visible
     this.scheme.update({ visible })
+    // the fog belongs to street level; the city view is the opaque okrug board
+    if (this.scene) this.renderFog(this.scene)
   }
 
   /**
@@ -517,7 +576,8 @@ export class YandexMapService implements MapService {
   }
 
   private renderExplored(scene: MapScene): void {
-    const cells = scene.exploredCells
+    // with the fog on, explored land is simply the clear map: no tint on top of it
+    const cells = scene.fog ? NO_CELLS : scene.exploredCells
     if (this.explored?.cells === cells) return
     if (this.explored && cells.length === 0) {
       this.map!.removeChild(this.explored.feature)
@@ -541,6 +601,74 @@ export class YandexMapService implements MapService {
     this.explored = { feature, cells }
   }
 
+  /**
+   * Fog of War: the game area minus the explored cells, one feature. Rebuilt only when the cell
+   * list changes (a new array from the store), not on every GPS fix or map move. Tapping the fog
+   * selects nothing, so footprints under it cannot be opened.
+   */
+  private renderFog(scene: MapScene): void {
+    const show = scene.fog && this.basemapVisible
+    if (!show) {
+      if (this.fog) {
+        this.map!.removeChild(this.fog.feature)
+        this.fog = null
+      }
+      return
+    }
+    if (this.fog?.cells === scene.exploredCells) return
+    const geometry = toYandexGeometry(fogGeometry(scene.exploredCells, FOG_AREA))
+    const explored = new Set(scene.exploredCells.map(cellKey))
+    if (this.fog) {
+      this.fog.feature.update({ geometry })
+      this.fog.cells = scene.exploredCells
+      this.fog.explored = explored
+      return
+    }
+    const feature = new this.api!.YMapFeature({
+      id: 'fog',
+      source: FOG_SOURCE,
+      geometry,
+      properties: { kind: 'fog' },
+      // soft strokes along every edge blur the 11 m steps of the grid a little
+      style: {
+        fill: MAP_COLORS.fog,
+        fillOpacity: 1,
+        stroke: [
+          { color: MAP_COLORS.fog, width: 10, opacity: 0.25 },
+          { color: MAP_COLORS.fog, width: 5, opacity: 0.5 },
+        ],
+      },
+    })
+    this.map!.addChild(feature)
+    this.fog = { feature, cells: scene.exploredCells, explored }
+  }
+
+  /** freshly revealed cells: a brighter fill on top of the explored layer, same source */
+  private renderRecent(scene: MapScene): void {
+    const cells = scene.recentCells
+    if (this.recent?.cells === cells) return
+    if (this.recent && cells.length === 0) {
+      this.map!.removeChild(this.recent.feature)
+      this.recent = null
+      return
+    }
+    if (cells.length === 0) return
+    const geometry = toYandexGeometry(cellsToMultiPolygon(cells))
+    if (this.recent) {
+      this.recent.feature.update({ geometry })
+      this.recent.cells = cells
+      return
+    }
+    const feature = new this.api!.YMapFeature({
+      id: 'explored-recent',
+      source: EXPLORED_SOURCE,
+      geometry,
+      style: { fill: MAP_COLORS.accent, fillOpacity: 0.5, stroke: [{ width: 0 }], interactive: false },
+    })
+    this.map!.addChild(feature)
+    this.recent = { feature, cells }
+  }
+
   private renderPosition(scene: MapScene): void {
     const api = this.api!
     const p = scene.position
@@ -556,11 +684,13 @@ export class YandexMapService implements MapService {
     const halo = { type: 'Polygon' as const, coordinates: [circle(center, Math.max(p.accuracyM, 5))] }
     if (!this.me) {
       this.me = {
+        // above the fog: the player is always visible, explored or not
         halo: new api.YMapFeature({
+          source: TOP_SOURCE,
           geometry: halo,
           style: { zIndex: 50, fill: MAP_COLORS.accent, fillOpacity: 0.14, stroke: [{ width: 0 }], interactive: false },
         }),
-        dot: new api.YMapMarker({ coordinates: center, zIndex: 200 }, element('metka-me')),
+        dot: new api.YMapMarker({ coordinates: center, zIndex: 200, source: TOP_MARKERS_SOURCE }, element('metka-me')),
       }
       this.map!.addChild(this.me.halo)
       this.map!.addChild(this.me.dot)

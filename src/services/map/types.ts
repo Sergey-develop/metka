@@ -36,6 +36,10 @@ export interface MapScene {
   position: GeoFix | null
   /** explored territory cells; drawn under basemap labels and above its buildings */
   exploredCells: readonly Cell[]
+  /** cells revealed a moment ago (subset of exploredCells), highlighted briefly */
+  recentCells: readonly Cell[]
+  /** Fog of War: hide unexplored land at street level (exploredCells are the holes) */
+  fog: boolean
 }
 
 /**

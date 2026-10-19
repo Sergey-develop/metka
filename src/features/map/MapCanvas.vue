@@ -18,6 +18,9 @@ const props = defineProps<{
   selectedDistrictId: string | null
   selectedOutlineId: number | null
   exploredCells: readonly Cell[]
+  recentCells: readonly Cell[]
+  /** Fog of War over unexplored land */
+  fog: boolean
   /** px covered by overlays (header, tab bar) so fitting keeps content visible */
   padding: { top: number; bottom: number }
 }>()
@@ -49,6 +52,8 @@ function scene(): MapScene {
     selectedOutlineId: props.selectedOutlineId,
     position: props.position,
     exploredCells: props.exploredCells,
+    recentCells: props.recentCells,
+    fog: props.fog,
   }
 }
 
@@ -107,6 +112,8 @@ watch(
       props.selectedDistrictId,
       props.selectedOutlineId,
       props.exploredCells,
+      props.recentCells,
+      props.fog,
     ] as const,
   () => map?.render(scene()),
 )

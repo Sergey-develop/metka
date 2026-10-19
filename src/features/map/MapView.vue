@@ -95,6 +95,9 @@ const EXPLORE_TEXT: Record<ExplorationStatus, string | null> = {
 
 /** Admin shortcut until the catalog page exists: publish the tapped footprint as a game building. */
 const isAdmin = ref(false)
+/** Fog of War is always on for players; admins may lift it to set up buildings anywhere */
+const fogLifted = ref(false)
+const fogOn = computed(() => !(isAdmin.value && fogLifted.value))
 const publishing = ref(false)
 const publishError = ref<string | null>(null)
 
@@ -123,6 +126,10 @@ async function publishOutline(): Promise<void> {
 /** One status line for the exploration mode (null = nothing worth showing). */
 const exploreChip = computed<{ text: string; warn: boolean } | null>(() => {
   const waiting = exploration.pending ? ` (${exploration.pending})` : ''
+  if (exploration.enabled && exploration.paused) {
+    const saving = exploration.sync === 'syncing' ? ' · сохраняем…' : exploration.pending ? ` · не отправлено ${exploration.pending}` : ''
+    return { text: `Исследование на паузе — GPS выключен${saving}`, warn: false }
+  }
   if (exploration.enabled && exploration.sync === 'offline') return { text: `Нет сети · путь сохранится позже${waiting}`, warn: true }
   if (exploration.enabled && exploration.sync === 'error') return { text: `Ошибка сохранения · повторим${waiting}`, warn: true }
   const text = EXPLORE_TEXT[exploration.status]
@@ -136,7 +143,8 @@ const exploreChip = computed<{ text: string; warn: boolean } | null>(() => {
   if (exploration.status === 'tracking') {
     const total = exploration.totalCells === null ? '' : ` · всего ${exploration.totalCells}`
     const state = exploration.sync === 'syncing' ? ' · сохраняем…' : exploration.sync === 'saved' ? ' · сохранено' : ''
-    return { text: `Исследование · открыто ${exploration.sessionCells}${total}${state}`, warn: false }
+    const gain = exploration.lastGain ? ` · +${exploration.lastGain.count} новых` : ''
+    return { text: `Исследование · открыто ${exploration.sessionCells}${total}${gain}${state}`, warn: false }
   }
   return null
 })
@@ -234,6 +242,8 @@ onBeforeUnmount(() => {
       :selected-district-id="map.selectedDistrictId"
       :selected-outline-id="selectedOutlineId"
       :explored-cells="exploration.cellList"
+      :recent-cells="exploration.recentList"
+      :fog="fogOn"
       :padding="{ top: headerHeight, bottom: 110 }"
       @viewport="onViewport"
       @select-building="selectBuilding"
@@ -307,6 +317,15 @@ onBeforeUnmount(() => {
       <span class="explore__dot" aria-hidden="true" />
       Исследование
     </button>
+    <button
+      v-if="exploration.enabled && !map.selectedBuilding && !map.selectedDistrict && !outlines.selected"
+      class="explore-pause"
+      :aria-pressed="exploration.paused"
+      :aria-label="exploration.paused ? 'Продолжить исследование' : 'Пауза исследования'"
+      @click="exploration.paused ? exploration.resumeByPlayer() : exploration.pauseByPlayer()"
+    >
+      {{ exploration.paused ? '▶' : '❚❚' }}
+    </button>
 
     <RouterLink
       v-if="!map.selectedBuilding && !map.selectedDistrict && !outlines.selected"
@@ -338,6 +357,9 @@ onBeforeUnmount(() => {
         <span v-else-if="outlines.truncated" class="chip chip--warn">Показаны не все здания — приблизьте карту</span>
         <span v-if="mapError" class="chip chip--warn">Карта загружается с ошибками</span>
         <span v-if="exploreChip" class="chip" :class="{ 'chip--warn': exploreChip.warn }">{{ exploreChip.text }}</span>
+        <button v-if="isAdmin" class="chip" :aria-pressed="fogOn" @click="fogLifted = !fogLifted">
+          Туман: {{ fogOn ? 'вкл' : 'выкл' }} (админ)
+        </button>
       </div>
       <BuildingCard
         v-if="map.selectedBuilding"
@@ -578,6 +600,25 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   color: #fff;
+}
+.explore-pause {
+  position: absolute;
+  right: 16px;
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + 212px);
+  z-index: 5;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--c-surface);
+  box-shadow: var(--shadow-card);
+  color: var(--c-accent);
+  font-size: 15px;
+  font-weight: 700;
+  &[aria-pressed='true'] {
+    background: var(--c-accent);
+    color: #fff;
+  }
 }
 .explore {
   position: absolute;
