@@ -7,7 +7,7 @@ import type { MapBuilding, Rarity } from '@/types/game'
 import { allowedScanDistance, distanceMeters, formatDistance } from '@/utils/geo'
 
 const props = defineProps<{ building: MapBuilding; position: GeoFix | null }>()
-defineEmits<{ close: []; scan: [] }>()
+defineEmits<{ close: []; scan: []; memory: [] }>()
 
 const RARITY: Record<Rarity, string> = { common: 'Обычное', rare: 'Редкое', epic: 'Эпическое', legendary: 'Легендарное' }
 
@@ -31,6 +31,7 @@ const status = computed(() => {
       <div>
         <p class="sheet__rarity" :class="`r-${building.rarity}`">{{ RARITY[building.rarity] }}</p>
         <h2 class="sheet__title">{{ building.name }}</h2>
+        <p v-if="building.address" class="sheet__address">{{ building.address }}</p>
       </div>
       <button class="sheet__close" aria-label="Закрыть" @click="$emit('close')"><AppIcon name="close" :size="16" /></button>
     </header>
@@ -51,6 +52,9 @@ const status = computed(() => {
     </dl>
     <p class="sheet__status" :class="`s-${status.cls}`">{{ status.text }}</p>
     <p v-if="building.isDevSeed" class="notice notice--warning sheet__dev">Тестовые данные: координаты приблизительные.</p>
+    <AppButton v-if="building.discoveredAt" block variant="secondary" @click="$emit('memory')">
+      Воспоминание
+    </AppButton>
     <AppButton v-if="!building.discoveredAt" block @click="$emit('scan')">
       <AppIcon name="camera" :size="18" /> Сканировать
     </AppButton>
@@ -64,6 +68,11 @@ const status = computed(() => {
   flex-direction: column;
   gap: 12px;
   animation: rise 0.25s var(--ease);
+}
+.sheet__address {
+  color: var(--c-text-2);
+  font-size: 14px;
+  margin-top: 2px;
 }
 .sheet__head {
   display: flex;

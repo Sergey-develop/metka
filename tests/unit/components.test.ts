@@ -36,19 +36,21 @@ describe('BuildingCard', () => {
   it('hides the scan action for discovered buildings', () => {
     const w = mount(BuildingCard, { props: { building: { ...BUILDING, discoveredAt: '2026-01-01' }, position: null } })
     expect(w.text()).toContain('Открыто')
-    expect(w.find('button.btn').exists()).toBe(false)
+    const actions = w.findAll('button.btn').map((b) => b.text())
+    expect(actions.some((t) => t.includes('Сканировать'))).toBe(false)
+    expect(actions).toEqual(['Воспоминание']) // unlocked: only the album action
   })
 })
 
 describe('BottomNav', () => {
-  it('renders five tabs (results second, quests last) and labels only the active one', async () => {
+  it('renders four tabs (results second, profile last) and labels only the active one', async () => {
     const r = router()
     await r.push('/results')
     const w = mount(BottomNav, { global: { plugins: [r] } })
     const tabs = w.findAll('a')
-    expect(tabs).toHaveLength(5)
+    expect(tabs).toHaveLength(4)
     expect(tabs[1]?.attributes('href')).toBe('/results')
-    expect(tabs[4]?.attributes('href')).toBe('/quests')
+    expect(tabs[3]?.attributes('href')).toBe('/profile')
     expect(w.find('[aria-current="page"]').text()).toBe('Результаты')
   })
 })

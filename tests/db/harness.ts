@@ -69,6 +69,8 @@ export interface TestDb {
   db: PGlite
   createUser: (id: string, username?: string) => Promise<void>
   asUser: <T>(userId: string | null, fn: (tx: Transaction) => Promise<T>) => Promise<T>
+  /** server-side tooling (importer) runs with the service role key */
+  asServiceRole: <T>(fn: (tx: Transaction) => Promise<T>) => Promise<T>
 }
 
 export async function createTestDb(options: { seed?: boolean } = {}): Promise<TestDb> {
@@ -100,6 +102,13 @@ export async function createTestDb(options: { seed?: boolean } = {}): Promise<Te
         await tx.query(`select set_config('request.jwt.claims', $1, true)`, [
           JSON.stringify(userId ? { sub: userId, role: 'authenticated' } : { role: 'anon' }),
         ])
+        return fn(tx)
+      })
+    },
+    async asServiceRole(fn) {
+      return db.transaction(async (tx) => {
+        await tx.exec(`set local role service_role`)
+        await tx.query(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ role: 'service_role' })])
         return fn(tx)
       })
     },

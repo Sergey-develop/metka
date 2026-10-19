@@ -19,6 +19,11 @@ export interface CapturedPhoto {
 }
 
 export interface CameraService {
+  /**
+   * true when takePhoto() must be called synchronously inside the tap handler: browsers (iOS Safari
+   * especially) ignore a programmatic file-input click once an await has passed.
+   */
+  readonly requiresUserGesture?: boolean
   checkPermission(): Promise<AppPermissionState>
   requestPermission(): Promise<AppPermissionState>
   /** Opens the system camera. Rejects with CameraError. */

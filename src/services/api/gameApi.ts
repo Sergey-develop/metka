@@ -1,9 +1,19 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { ExplorationResult } from '../exploration/explorationTracker'
+import type { Cell } from '../exploration/grid'
+import type { TrackPoint } from '../exploration/trackFilter'
 import type { CandidateMatcher, RecognitionCandidate } from '../recognition/types'
 import {
   AVATAR_KEYS,
+  type AdminGameInfo,
   type AvatarKey,
   type Bbox,
+  type BuildingOutline,
+  type GameBuildingDraft,
+  type GameBuildingStatus,
+  type OutlineGameInfo,
+  type OutlinesPage,
+  type PlayerProgress,
   type ClaimResult,
   type Clan,
   type ClanMembership,
@@ -24,6 +34,7 @@ import { ApiError, toApiError, withRetry } from './errors'
 import { arr, bool, num, numOrNull, obj, oneOf, str, strOrNull, type Json } from './parse'
 
 const RARITIES = ['common', 'rare', 'epic', 'legendary'] as const satisfies readonly Rarity[]
+const GAME_STATUSES = ['draft', 'published', 'unavailable', 'hidden'] as const satisfies readonly GameBuildingStatus[]
 const REJECT_REASONS = [
   'rate_limited',
   'invalid_location',
@@ -118,15 +129,104 @@ function parseMultiPolygon(value: unknown): GeoJSON.MultiPolygon {
   return { type: 'MultiPolygon', coordinates }
 }
 
-const PROFILE_COLUMNS =
-  'id, username, avatar_url, avatar_key, setup_completed_at, level, xp, coins, buildings_discovered, home_district_id'
+function parsePosition(value: unknown): GeoJSON.Position {
+  const [lng, lat] = arr(value, 'position')
+  if (typeof lng !== 'number' || typeof lat !== 'number' || !Number.isFinite(lng) || !Number.isFinite(lat))
+    throw new ApiError('invalid_response', 'position: expected [lng, lat]')
+  return [lng, lat]
+}
+const parseRing = (value: unknown) => arr(value, 'ring').map(parsePosition)
+const parsePolygon = (value: unknown) => arr(value, 'polygon').map(parseRing)
 
-function parseProfile(row: unknown): Profile {
+function parseOutlineGeometry(value: unknown): BuildingOutline['geometry'] {
+  const o = obj(value, 'geometry')
+  switch (o.type) {
+    case 'Polygon':
+      return { type: 'Polygon', coordinates: parsePolygon(o.coordinates) }
+    case 'MultiPolygon':
+      return { type: 'MultiPolygon', coordinates: arr(o.coordinates, 'coordinates').map(parsePolygon) }
+    case 'Point':
+      return { type: 'Point', coordinates: parsePosition(o.coordinates) }
+    default:
+      throw new ApiError('invalid_response', 'geometry: expected Polygon|MultiPolygon|Point')
+  }
+}
+
+/** Game fields of an outline feature; null when the footprint is not in the (visible) catalog. */
+function parseGameInfo(p: Json): OutlineGameInfo | null {
+  if (p.gameBuildingId === undefined || p.gameBuildingId === null) return null
+  return {
+    id: str(p, 'gameBuildingId'),
+    status: oneOf(p, 'gameStatus', GAME_STATUSES),
+    name: str(p, 'gameName'),
+    description: strOrNull(p, 'description'),
+    category: strOrNull(p, 'gameCategory'),
+    rarity: oneOf(p, 'rarity', RARITIES),
+    imageUrl: strOrNull(p, 'imageUrl'),
+    discoveredAt: strOrNull(p, 'discoveredAt'),
+  }
+}
+
+function parseAdminGameInfo(p: Json): AdminGameInfo | null {
+  const base = parseGameInfo(p)
+  if (!base) return null
+  return {
+    ...base,
+    reward: { xp: num(p, 'rewardXp'), coins: num(p, 'rewardCoins'), influence: num(p, 'rewardInfluence') },
+    scanRadiusM: num(p, 'scanRadiusM'),
+    unlockConditions: p.unlockConditions === undefined ? {} : obj(p.unlockConditions, 'unlockConditions'),
+  }
+}
+
+function parseOutlinesPage<G extends OutlineGameInfo>(value: unknown, game: (p: Json) => G | null): OutlinesPage<G> {
+  const o = obj(value, 'outlines')
+  return {
+    truncated: o.truncated === true,
+    features: arr(o.features, 'features').map((raw): BuildingOutline<G> => {
+      const f = obj(raw, 'feature')
+      const p = obj(f.properties, 'properties')
+      return {
+        id: num(f, 'id'),
+        osmType: oneOf(p, 'osmType', ['node', 'way', 'relation'] as const),
+        osmId: num(p, 'osmId'),
+        geometry: parseOutlineGeometry(f.geometry),
+        name: strOrNull(p, 'name'),
+        address: strOrNull(p, 'address'),
+        category: strOrNull(p, 'category'),
+        game: game(p),
+      }
+    }),
+  }
+}
+
+function parseCells(value: unknown): Cell[] {
+  return arr(value, 'cells').map((c) => {
+    const [y, x] = arr(c, 'cell')
+    if (!Number.isInteger(y) || !Number.isInteger(x)) throw new ApiError('invalid_response', 'cell: expected [y, x]')
+    return [y as number, x as number] as const
+  })
+}
+
+function parseCounts(value: unknown): Record<string, number> {
+  const o = obj(value ?? {}, 'rejected')
+  return Object.fromEntries(Object.keys(o).map((k) => [k, num(o, k)]))
+}
+
+export interface ExploredCellsPage {
+  cells: Cell[]
+  truncated: boolean
+  totalCells: number
+}
+
+const PROFILE_COLUMNS =
+  'id, username, avatar_path, avatar_key, setup_completed_at, level, xp, coins, buildings_discovered, home_district_id'
+
+function parseProfile(row: unknown, avatarUrl: (path: string | null) => string | null): Profile {
   const o = obj(row, 'profile')
   return {
     id: str(o, 'id'),
     username: str(o, 'username'),
-    avatarUrl: strOrNull(o, 'avatar_url'),
+    avatarUrl: avatarUrl(strOrNull(o, 'avatar_path')),
     avatarKey: o.avatar_key === null || o.avatar_key === undefined ? null : oneOf(o, 'avatar_key', AVATAR_KEYS),
     setupCompleted: strOrNull(o, 'setup_completed_at') !== null,
     level: num(o, 'level'),
@@ -138,6 +238,9 @@ function parseProfile(row: unknown): Profile {
 }
 
 const CLAN_AVATAR_BUCKET = 'clan-avatars'
+const PROFILE_AVATAR_BUCKET = 'profile-avatars'
+/** private player photos (album + discovery photos), owner-only — migrations 010/011 */
+const PLAYER_PHOTO_BUCKET = 'memory-photos'
 
 /** Typed access to the METKA backend (PostgREST tables + RPC functions). */
 export class GameApi implements CandidateMatcher {
@@ -146,6 +249,9 @@ export class GameApi implements CandidateMatcher {
   private clanAvatarUrl(path: string | null): string | null {
     return path ? this.client.storage.from(CLAN_AVATAR_BUCKET).getPublicUrl(path).data.publicUrl : null
   }
+
+  private readonly profileAvatarUrl = (path: string | null): string | null =>
+    path ? this.client.storage.from(PROFILE_AVATAR_BUCKET).getPublicUrl(path).data.publicUrl : null
 
   private parseClan(o: Json): Clan {
     return {
@@ -170,6 +276,91 @@ export class GameApi implements CandidateMatcher {
       ),
     )
     return arr(data).map(parseBuilding)
+  }
+
+  /** Footprints (OSM) in the viewport with their game state; bbox span ≤ 0.1°. */
+  async getBuildingOutlines(bbox: Bbox, zoom: number, signal?: AbortSignal): Promise<OutlinesPage> {
+    const data = await this.outlinesRpc('osm_buildings_in_bbox', bbox, zoom, signal)
+    return parseOutlinesPage(data, (o) => parseGameInfo(o))
+  }
+
+  /** Sends filtered GPS fixes; the server derives and stores explored cells. Not retried here. */
+  async recordExploration(points: TrackPoint[]): Promise<ExplorationResult> {
+    const o = obj(await unwrap(this.client.rpc('record_exploration', { p_points: points })), 'exploration')
+    return {
+      accepted: num(o, 'accepted'),
+      rejected: parseCounts(o.rejected),
+      newCells: parseCells(o.newCells),
+      totalCells: num(o, 'totalCells'),
+    }
+  }
+
+  /** The player's explored cells in the viewport (bbox span ≤ 0.2°). */
+  async getExploredCells(bbox: Bbox, signal?: AbortSignal): Promise<ExploredCellsPage> {
+    const data = await withRetry(() => {
+      if (signal?.aborted) throw new ApiError('cancelled')
+      const request = this.client.rpc('explored_cells_in_bbox', {
+        p_min_lng: bbox.minLng,
+        p_min_lat: bbox.minLat,
+        p_max_lng: bbox.maxLng,
+        p_max_lat: bbox.maxLat,
+      })
+      return unwrap(signal ? request.abortSignal(signal) : request)
+    })
+    const o = obj(data, 'explored')
+    return { cells: parseCells(o.cells), truncated: o.truncated === true, totalCells: num(o, 'totalCells') }
+  }
+
+  /** TEST ONLY (migration 009): account may scan by location without recognition. */
+  async isLocationScanTester(): Promise<boolean> {
+    return (await unwrap(this.client.rpc('is_location_scan_tester'))) === true
+  }
+
+  async getProgress(): Promise<PlayerProgress> {
+    const o = obj(await withRetry(() => unwrap(this.client.rpc('player_progress'))), 'progress')
+    return {
+      exploredCells: num(o, 'exploredCells'),
+      exploredDistricts: num(o, 'exploredDistricts'),
+      districtMinCells: num(o, 'districtMinCells'),
+      unlockedBuildings: num(o, 'unlockedBuildings'),
+      memories: num(o, 'memories'),
+      favoritePlaces: num(o, 'favoritePlaces'),
+    }
+  }
+
+  async isAdmin(): Promise<boolean> {
+    return (await unwrap(this.client.rpc('is_admin'))) === true
+  }
+
+  /** Same as getBuildingOutlines but with drafts/hidden entries and admin fields; admins only. */
+  async getAdminCatalog(bbox: Bbox, zoom: number, signal?: AbortSignal): Promise<OutlinesPage<AdminGameInfo>> {
+    const data = await this.outlinesRpc('admin_catalog_in_bbox', bbox, zoom, signal)
+    return parseOutlinesPage(data, parseAdminGameInfo)
+  }
+
+  /** Creates the game building for a footprint (as a draft) or updates it; returns its id. Not retried. */
+  async saveGameBuilding(osmBuildingId: number, draft: GameBuildingDraft): Promise<string> {
+    const data = await unwrap(this.client.rpc('admin_save_game_building', { p_osm_building_id: osmBuildingId, p_data: draft }))
+    if (typeof data !== 'string') throw new ApiError('invalid_response', 'admin_save_game_building: expected id')
+    return data
+  }
+
+  async setGameBuildingStatus(buildingId: string, status: GameBuildingStatus): Promise<void> {
+    await unwrap(this.client.rpc('admin_set_game_building_status', { p_building_id: buildingId, p_status: status }))
+  }
+
+  private outlinesRpc(fn: string, bbox: Bbox, zoom: number, signal?: AbortSignal): Promise<unknown> {
+    return withRetry(() => {
+      if (signal?.aborted) throw new ApiError('cancelled')
+      const request = this.client.rpc(fn, {
+        p_min_lng: bbox.minLng,
+        p_min_lat: bbox.minLat,
+        p_max_lng: bbox.maxLng,
+        p_max_lat: bbox.maxLat,
+        p_zoom: zoom,
+      })
+      return unwrap(signal ? request.abortSignal(signal) : request)
+    })
   }
 
   async getDistrictsOverview(): Promise<DistrictOverview[]> {
@@ -239,16 +430,15 @@ export class GameApi implements CandidateMatcher {
           .single(),
       ),
     )
-    return parseProfile(data)
+    return parseProfile(data, this.profileAvatarUrl)
   }
 
   async updateProfile(
     userId: string,
-    patch: { username?: string; avatarUrl?: string | null; avatarKey?: AvatarKey },
+    patch: { username?: string; avatarKey?: AvatarKey },
   ): Promise<Profile> {
     const update: Record<string, string | null> = {}
     if (patch.username !== undefined) update.username = patch.username
-    if (patch.avatarUrl !== undefined) update.avatar_url = patch.avatarUrl
     if (patch.avatarKey !== undefined) update.avatar_key = patch.avatarKey
     const data = await unwrap(
       this.client
@@ -258,7 +448,7 @@ export class GameApi implements CandidateMatcher {
         .select(PROFILE_COLUMNS)
         .single(),
     )
-    return parseProfile(data)
+    return parseProfile(data, this.profileAvatarUrl)
   }
 
   /** Registration step "game profile". Raises username_taken / invalid_profile. */
@@ -266,12 +456,57 @@ export class GameApi implements CandidateMatcher {
     await unwrap(this.client.rpc('complete_profile_setup', { p_username: username, p_avatar_key: avatarKey }))
   }
 
+  /**
+   * Uploads a prepared (re-encoded, ≤512 KB) image as the player's avatar and makes it current.
+   * Storage RLS and set_profile_avatar() both restrict writes to the caller's own folder.
+   */
+  async setProfileAvatar(userId: string, image: Blob): Promise<void> {
+    const ext = image.type === 'image/webp' ? 'webp' : 'jpg'
+    const path = `${userId}/${crypto.randomUUID()}.${ext}`
+    const bucket = this.client.storage.from(PROFILE_AVATAR_BUCKET)
+    const { error } = await bucket.upload(path, image, { contentType: image.type, upsert: false, cacheControl: '31536000' })
+    if (error) throw toApiError(error)
+    let previous: unknown
+    try {
+      previous = await unwrap(this.client.rpc('set_profile_avatar', { p_path: path }))
+    } catch (e) {
+      await bucket.remove([path]) // don't leave an orphan behind
+      throw e
+    }
+    // best effort: a leftover old file only costs storage
+    if (typeof previous === 'string') await bucket.remove([previous])
+  }
+
+  async removeProfileAvatar(): Promise<void> {
+    const previous = await unwrap(this.client.rpc('set_profile_avatar', { p_path: null }))
+    if (typeof previous === 'string') await this.client.storage.from(PROFILE_AVATAR_BUCKET).remove([previous])
+  }
+
+  /**
+   * Stores the photo of the unlocking scan for the collection (private bucket, migration 011).
+   * `image` must already be re-encoded (EXIF stripped). replace = false keeps an existing photo.
+   */
+  async setDiscoveryPhoto(userId: string, buildingId: string, image: Blob, replace: boolean): Promise<void> {
+    const path = `${userId}/${crypto.randomUUID()}.${image.type === 'image/webp' ? 'webp' : 'jpg'}`
+    const bucket = this.client.storage.from(PLAYER_PHOTO_BUCKET)
+    const { error } = await bucket.upload(path, image, { contentType: image.type, upsert: false })
+    if (error) throw toApiError(error)
+    let unused: unknown
+    try {
+      unused = await unwrap(this.client.rpc('set_discovery_photo', { p_building_id: buildingId, p_photo_path: path, p_replace: replace }))
+    } catch (e) {
+      await bucket.remove([path]) // no orphan
+      throw e
+    }
+    if (typeof unused === 'string') await bucket.remove([unused]) // replaced or not needed
+  }
+
   async getCollection(): Promise<CollectionItem[]> {
     const data = await withRetry(() =>
       unwrap(
         this.client
           .from('player_buildings')
-          .select('building_id, discovered_at, buildings(name, rarity, image_url, district_id)')
+          .select('building_id, discovered_at, photo_path, buildings(name, rarity, image_url, district_id)')
           .order('discovered_at', { ascending: false }),
       ),
     )
@@ -287,6 +522,7 @@ export class GameApi implements CandidateMatcher {
           rarity: oneOf(b, 'rarity', RARITIES),
           imageUrl: strOrNull(b, 'image_url'),
           districtId: strOrNull(b, 'district_id'),
+          photoPath: strOrNull(o, 'photo_path'),
         },
       ]
     })

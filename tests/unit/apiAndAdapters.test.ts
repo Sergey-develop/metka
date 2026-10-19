@@ -4,7 +4,7 @@ import { ApiError, toApiError, withRetry } from '@/services/api/errors'
 import { GameApi, parseScanDecision } from '@/services/api/gameApi'
 import { mapAuthError } from '@/services/auth/authService'
 import { mapCameraError } from '@/services/camera/capacitorCamera'
-import { mapGeolocationError } from '@/services/geolocation/capacitorGeolocation'
+import { CapacitorGeolocationService, mapGeolocationError } from '@/services/geolocation/capacitorGeolocation'
 import { levelForXp, levelProgress, xpForLevel } from '@/features/progression/levels'
 import { allowedScanDistance, distanceMeters, formatDistance } from '@/utils/geo'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -101,6 +101,44 @@ describe('GameApi parsing', () => {
       expect(bucket.remove).toHaveBeenCalledWith([path])
     })
   })
+
+  describe('profile avatar', () => {
+    const USER = '22222222-2222-4222-8222-222222222222'
+    function fakeClient(rpcResult: { data: unknown; error: unknown }) {
+      const bucket = {
+        upload: vi.fn().mockResolvedValue({ data: {}, error: null }),
+        remove: vi.fn().mockResolvedValue({ data: [], error: null }),
+      }
+      const client = { rpc: vi.fn().mockResolvedValue(rpcResult), storage: { from: vi.fn(() => bucket) } }
+      return { api: new GameApi(client as unknown as SupabaseClient), client, bucket }
+    }
+    const image = new Blob(['x'], { type: 'image/jpeg' })
+
+    it("uploads into the player's folder under a fresh name and deletes the previous file", async () => {
+      const { api, client, bucket } = fakeClient({ data: `${USER}/old.webp`, error: null })
+      await api.setProfileAvatar(USER, image)
+      const path = bucket.upload.mock.calls[0]?.[0] as string
+      expect(path).toMatch(new RegExp(`^${USER}/[0-9a-f-]{36}\\.jpg$`))
+      expect(client.storage.from).toHaveBeenCalledWith('profile-avatars')
+      expect(bucket.upload).toHaveBeenCalledWith(path, image, expect.objectContaining({ upsert: false }))
+      expect(client.rpc).toHaveBeenCalledWith('set_profile_avatar', { p_path: path })
+      expect(bucket.remove).toHaveBeenCalledWith([`${USER}/old.webp`])
+    })
+
+    it('removes the uploaded file when the server rejects it', async () => {
+      const { api, bucket } = fakeClient({ data: null, error: { message: 'invalid_avatar', code: '22023' } })
+      await expect(api.setProfileAvatar(USER, image)).rejects.toMatchObject({ code: 'invalid_avatar' })
+      const path = bucket.upload.mock.calls[0]?.[0] as string
+      expect(bucket.remove).toHaveBeenCalledWith([path])
+    })
+
+    it('clears the avatar and deletes the old file', async () => {
+      const { api, client, bucket } = fakeClient({ data: `${USER}/old.jpg`, error: null })
+      await api.removeProfileAvatar()
+      expect(client.rpc).toHaveBeenCalledWith('set_profile_avatar', { p_path: null })
+      expect(bucket.remove).toHaveBeenCalledWith([`${USER}/old.jpg`])
+    })
+  })
 })
 
 describe('platform adapters', () => {
@@ -120,6 +158,33 @@ describe('platform adapters', () => {
     expect(mapGeolocationError({ code: 2, message: 'Position unavailable' }).code).toBe('unavailable')
   })
 
+  it('asks for location on the web via a position request (the web plugin has no requestPermissions)', async () => {
+    const position = { timestamp: 1, coords: { latitude: 55.7, longitude: 37.6, accuracy: 10 } }
+    const plugin = {
+      checkPermissions: vi.fn(async () => ({ location: 'prompt' as const, coarseLocation: 'prompt' as const })),
+      requestPermissions: vi.fn(async () => {
+        throw new Error('Not implemented on web.')
+      }),
+      getCurrentPosition: vi.fn(async () => position),
+      watchPosition: vi.fn(async () => '1'),
+      clearWatch: vi.fn(async () => undefined),
+    }
+    const web = new CapacitorGeolocationService(plugin as never, false)
+    await expect(web.requestPermission()).resolves.toBe('granted')
+    expect(plugin.requestPermissions).not.toHaveBeenCalled()
+
+    plugin.getCurrentPosition.mockRejectedValueOnce({ code: 1, message: 'User denied Geolocation' })
+    await expect(web.requestPermission()).resolves.toBe('denied')
+    plugin.getCurrentPosition.mockRejectedValueOnce({ code: 3, message: 'Timeout expired' })
+    await expect(web.requestPermission()).resolves.toBe('granted') // answered, just no fix yet
+
+    const native = new CapacitorGeolocationService(
+      { ...plugin, requestPermissions: vi.fn(async () => ({ location: 'granted' as const, coarseLocation: 'granted' as const })) } as never,
+      true,
+    )
+    await expect(native.requestPermission()).resolves.toBe('granted')
+  })
+
   it('maps Supabase Auth errors', () => {
     expect(mapAuthError(new Error('Invalid login credentials')).code).toBe('invalid_credentials')
     expect(mapAuthError(Object.assign(new Error('x'), { code: 'email_not_confirmed' })).code).toBe('email_not_confirmed')
@@ -129,13 +194,29 @@ describe('platform adapters', () => {
 
 describe('config', () => {
   it('requires public Supabase settings and never enables mocks in production', () => {
-    expect(readConfig({ DEV: false })).toEqual({ ok: false, missing: ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY'] })
-    const prod = readConfig({ DEV: false, VITE_SUPABASE_URL: 'https://a.supabase.co', VITE_SUPABASE_ANON_KEY: 'k', VITE_USE_MOCKS: 'true' })
+    expect(readConfig({ DEV: false })).toEqual({
+      ok: false,
+      missing: ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'VITE_YANDEX_MAPS_API_KEY'],
+    })
+    const mapsKey = '00000000-0000-4000-8000-000000000000'
+    expect(readConfig({ DEV: false, VITE_SUPABASE_URL: 'https://a.supabase.co', VITE_SUPABASE_ANON_KEY: 'k', VITE_YANDEX_MAPS_API_KEY: 'x' })).toEqual({
+      ok: false,
+      missing: ['VITE_YANDEX_MAPS_API_KEY'],
+    })
+    const prod = readConfig({
+      DEV: false,
+      VITE_SUPABASE_URL: 'https://a.supabase.co',
+      VITE_SUPABASE_ANON_KEY: 'k',
+      VITE_YANDEX_MAPS_API_KEY: mapsKey,
+      VITE_USE_MOCKS: 'true',
+    })
+    expect(prod.ok && prod.config.yandexMapsApiKey).toBe(mapsKey)
     expect(prod.ok && prod.config.useMocks).toBe(false)
     const dev = readConfig({
       DEV: true,
       VITE_SUPABASE_URL: 'https://a.supabase.co',
       VITE_SUPABASE_ANON_KEY: 'k',
+      VITE_YANDEX_MAPS_API_KEY: mapsKey,
       VITE_USE_MOCKS: 'true',
       VITE_AUTH_OAUTH_PROVIDERS: 'google, nope ,apple',
     })

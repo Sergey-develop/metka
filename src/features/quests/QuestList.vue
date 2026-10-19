@@ -10,8 +10,8 @@ onMounted(() => void quests.load())
 </script>
 
 <template>
-  <main class="page">
-    <h1 class="page-title">Задания</h1>
+  <section id="quests" class="quests" aria-labelledby="quests-title">
+    <h2 id="quests-title" class="quests__title">Задания</h2>
     <StateBlock v-if="quests.loading && !quests.loaded" kind="loading" title="Загружаем задания…" />
     <StateBlock
       v-else-if="quests.error && !quests.loaded"
@@ -26,7 +26,7 @@ onMounted(() => void quests.load())
       <ul class="list">
         <li v-for="q in quests.quests" :key="q.id" class="quest card">
           <div class="quest__head">
-            <h2>{{ q.title }}</h2>
+            <h3>{{ q.title }}</h3>
             <span class="quest__reward">+{{ q.reward.xp }} XP · {{ q.reward.coins }} ◎</span>
           </div>
           <p class="muted quest__desc">{{ q.description }}</p>
@@ -41,10 +41,18 @@ onMounted(() => void quests.load())
         </li>
       </ul>
     </template>
-  </main>
+  </section>
 </template>
 
 <style scoped lang="scss">
+.quests {
+  margin-bottom: 12px;
+}
+.quests__title {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0 4px 10px;
+}
 .list {
   list-style: none;
   margin: 0;
@@ -64,7 +72,7 @@ onMounted(() => void quests.load())
   justify-content: space-between;
   align-items: baseline;
   gap: 8px;
-  h2 {
+  h3 {
     font-size: 17px;
     font-weight: 700;
   }

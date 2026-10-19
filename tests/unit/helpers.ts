@@ -9,7 +9,7 @@ import type { MapBuilding, ScanDecision, ScanSubmission } from '@/types/game'
 export const CONFIG: AppConfig = {
   supabaseUrl: 'https://example.supabase.co',
   supabaseAnonKey: 'anon',
-  mapTilesUrl: 'https://example/tiles.json',
+  yandexMapsApiKey: '00000000-0000-4000-8000-000000000000',
   recognitionManifestUrl: null,
   oauthProviders: [],
   useMocks: false,
@@ -88,6 +88,8 @@ export function installFakeServices(): FakeServices {
     getCollection: vi.fn(async () => []),
     getQuests: vi.fn(async () => []),
     claimQuest: vi.fn(),
+    isLocationScanTester: vi.fn(async () => false),
+    setDiscoveryPhoto: vi.fn(async () => undefined),
   }
   const services = {
     config: CONFIG,
@@ -98,6 +100,18 @@ export function installFakeServices(): FakeServices {
     geolocation,
     recognition,
     lifecycle: { onActiveChange: () => () => undefined, onDeepLink: () => () => undefined },
+    createMap: () => {
+      throw new Error('map is not available in unit tests')
+    },
+    memories: {
+      list: vi.fn(async () => []),
+      save: vi.fn(),
+      remove: vi.fn(async () => undefined),
+      photoUrls: vi.fn(async () => new Map<string, string>()),
+    },
+    createExplorationTracker: () => {
+      throw new Error('override createExplorationTracker in the test')
+    },
     mocked: false,
     devTools: null,
   } satisfies AppServices

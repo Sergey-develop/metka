@@ -30,7 +30,11 @@ const recognitionNote = computed(() => (scan.recognition ? recognitionMessage(sc
 const distance = computed(() => (scan.building ? map.distanceTo(scan.building) : null))
 const busyText = computed(() => (scan.phase in PHASE_TEXT ? PHASE_TEXT[scan.phase as keyof typeof PHASE_TEXT] : ''))
 
-onMounted(() => scan.start(props.buildingId))
+onMounted(() => {
+  scan.start(props.buildingId)
+  // no recognition model yet: find out early whether this account may scan by location (test mode)
+  if (!services().recognition.isAvailable()) void scan.checkLocationTester()
+})
 onBeforeUnmount(() => scan.cancel())
 
 function close(): void {
@@ -53,6 +57,9 @@ function teleport(): void {
       </div>
     </header>
 
+    <p v-if="scan.locationTestMode" class="notice notice--warning scanner__dev">
+      Тестовый режим: здание засчитывается по местоположению, без распознавания фото.
+    </p>
     <p v-if="mocked" class="notice notice--warning scanner__dev">
       Режим разработки: распознавание симулируется, проверка на сервере — настоящая.
       <button class="link" @click="teleport">Переместиться к зданию</button>
@@ -120,7 +127,13 @@ function teleport(): void {
           <AppButton block :loading="scan.busy" @click="scan.capture()">
             <AppIcon name="camera" :size="18" /> Сделать снимок
           </AppButton>
-          <AppButton v-if="scan.phase === 'analyzing'" block variant="ghost" @click="scan.cancel()">Отменить</AppButton>
+          <AppButton
+            v-if="scan.phase === 'analyzing' || scan.phase === 'locating' || scan.phase === 'capturing'"
+            block
+            variant="ghost"
+            @click="scan.cancel()"
+            >Отменить</AppButton
+          >
         </div>
       </section>
     </template>

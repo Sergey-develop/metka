@@ -6,6 +6,8 @@ import { CameraError, type CameraService, type CapturedPhoto } from './types'
  * capture="environment" opens the rear camera on mobile browsers.
  */
 export class WebCameraService implements CameraService {
+  readonly requiresUserGesture = true
+
   async checkPermission(): Promise<AppPermissionState> {
     return 'granted'
   }
@@ -36,6 +38,12 @@ export class WebCameraService implements CameraService {
           }
         }, 1000)
       }
+      // Safari 16.4+/Chrome fire `cancel` when the picker is dismissed without a photo
+      input.addEventListener('cancel', () => {
+        if (settled) return
+        finish()
+        reject(new CameraError('cancelled'))
+      })
       input.addEventListener('change', () => {
         const file = input.files?.[0]
         finish()

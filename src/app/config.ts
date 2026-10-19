@@ -4,8 +4,8 @@ export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number]
 export interface AppConfig {
   supabaseUrl: string
   supabaseAnonKey: string
-  /** TileJSON URL of the OpenMapTiles-schema vector basemap */
-  mapTilesUrl: string
+  /** Yandex Maps JavaScript API 3.0 key; public, restricted by HTTP Referer in the developer console */
+  yandexMapsApiKey: string
   /** URL of the recognition model manifest (see ADR-001); null = recognition unavailable */
   recognitionManifestUrl: string | null
   oauthProviders: OAuthProvider[]
@@ -17,14 +17,13 @@ export interface AppConfig {
 
 export type ConfigResult = { ok: true; config: AppConfig } | { ok: false; missing: string[] }
 
-export const DEFAULT_MAP_TILES = 'https://tiles.openfreemap.org/planet'
 export const NATIVE_AUTH_REDIRECT = 'app.metka.game://auth/callback'
 
 interface EnvLike {
   DEV: boolean
   VITE_SUPABASE_URL?: string
   VITE_SUPABASE_ANON_KEY?: string
-  VITE_MAP_TILES_URL?: string
+  VITE_YANDEX_MAPS_API_KEY?: string
   VITE_RECOGNITION_MODEL_URL?: string
   VITE_AUTH_OAUTH_PROVIDERS?: string
   VITE_USE_MOCKS?: string
@@ -40,6 +39,8 @@ export function readConfig(env: EnvLike): ConfigResult {
   const missing: string[] = []
   if (!/^https?:\/\//.test(url) || url.includes('YOUR-PROJECT')) missing.push('VITE_SUPABASE_URL')
   if (!key || key.startsWith('your-')) missing.push('VITE_SUPABASE_ANON_KEY')
+  const mapsKey = env.VITE_YANDEX_MAPS_API_KEY?.trim() ?? ''
+  if (!/^[0-9a-f-]{36}$/i.test(mapsKey)) missing.push('VITE_YANDEX_MAPS_API_KEY')
   if (missing.length > 0) return { ok: false, missing }
 
   return {
@@ -47,7 +48,7 @@ export function readConfig(env: EnvLike): ConfigResult {
     config: {
       supabaseUrl: url,
       supabaseAnonKey: key,
-      mapTilesUrl: env.VITE_MAP_TILES_URL?.trim() || DEFAULT_MAP_TILES,
+      yandexMapsApiKey: mapsKey,
       recognitionManifestUrl: env.VITE_RECOGNITION_MODEL_URL?.trim() || null,
       oauthProviders: (env.VITE_AUTH_OAUTH_PROVIDERS ?? '')
         .split(',')

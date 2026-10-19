@@ -50,8 +50,10 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: 'map', name: 'map', component: () => import('@/features/map/MapView.vue') },
       { path: 'results', name: 'results', component: () => import('@/features/results/ResultsView.vue') },
-      { path: 'quests', name: 'quests', component: () => import('@/features/quests/QuestsView.vue') },
+      // quests live on the profile page now; keep old links working
+      { path: 'quests', redirect: '/profile' },
       { path: 'collection', name: 'collection', component: () => import('@/features/collection/CollectionView.vue') },
+      { path: 'album', name: 'album', component: () => import('@/features/album/AlbumView.vue') },
       { path: 'profile', name: 'profile', component: () => import('@/features/profile/ProfileView.vue') },
       { path: 'clan', name: 'clan', component: () => import('@/features/clans/ClanView.vue') },
     ],
@@ -66,7 +68,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/:pathMatch(.*)*', redirect: '/map' },
 ]
 
-export const router = createRouter({ history: createWebHistory(), routes })
+export const router = createRouter({ history: createWebHistory(import.meta.env.BASE_URL), routes })
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore()

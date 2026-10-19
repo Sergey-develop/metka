@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { services } from '@/app/providers/services'
+import FigureLoader from '@/components/ui/FigureLoader.vue'
 import FilledIcon from '@/components/ui/FilledIcon.vue'
 import StateBlock from '@/components/ui/StateBlock.vue'
 import ClanAvatar from '@/features/clans/ClanAvatar.vue'
 import { useClanStore } from '@/stores/clan'
 import { useMapStore } from '@/stores/map'
 import { useProfileStore } from '@/stores/profile'
+import type { PlayerProgress } from '@/types/game'
 
 const store = useProfileStore()
 const clan = useClanStore()
@@ -29,7 +32,24 @@ const influence = computed(() =>
 const influenceTotal = computed(() => map.districts.reduce((sum, d) => sum + d.myInfluence, 0))
 const xpLeft = computed(() => Math.max(0, store.progress.xpForNextLevel - store.progress.xpIntoLevel))
 
+/** territory, places, album — each counted from its own table on the server (player_progress) */
+const progress = ref<PlayerProgress | null>(null)
+const progressFailed = ref(false)
+const progressLoading = ref(true)
+async function loadProgress(): Promise<void> {
+  progressFailed.value = false
+  progressLoading.value = true
+  try {
+    progress.value = await services().api.getProgress()
+  } catch {
+    progressFailed.value = true
+  } finally {
+    progressLoading.value = false
+  }
+}
+
 onMounted(() => {
+  void loadProgress()
   if (!store.profile) void store.load()
   void clan.load()
   if (map.districts.length === 0) void map.loadDistricts()
@@ -68,6 +88,39 @@ onMounted(() => {
             <span v-else class="track__dot" :class="{ 'track__dot--done': i - 1 < doneDots }" />
           </template>
         </div>
+      </section>
+
+      <section class="tile tile--wide" aria-label="Исследование и альбом">
+        <div class="tile__head"><span class="chip">Исследование и альбом</span></div>
+        <div v-if="progressLoading" class="stats-loader" role="status">
+          <FigureLoader :size="36" />
+        </div>
+        <p v-else-if="progressFailed" class="tile__label">
+          Не удалось загрузить · <button class="link" @click="loadProgress">повторить</button>
+        </p>
+        <dl v-else class="stats">
+          <div>
+            <dt>Открыто территории</dt>
+            <dd>{{ progress?.exploredCells ?? '—' }} <small>ячеек</small></dd>
+          </div>
+          <div>
+            <dt>Исследовано районов</dt>
+            <dd>{{ progress?.exploredDistricts ?? '—' }}</dd>
+          </div>
+          <div>
+            <dt>Открыто зданий</dt>
+            <dd>{{ progress?.unlockedBuildings ?? '—' }}</dd>
+          </div>
+          <div>
+            <dt>Воспоминаний</dt>
+            <dd>{{ progress?.memories ?? '—' }}</dd>
+          </div>
+          <div>
+            <dt>Любимых мест</dt>
+            <dd>{{ progress?.favoritePlaces ?? '—' }}</dd>
+          </div>
+        </dl>
+        <p v-if="progress" class="tile__label muted">Район засчитывается от {{ progress.districtMinCells }} открытых ячеек (~1 км улиц).</p>
       </section>
 
       <div class="grid">
@@ -139,6 +192,41 @@ onMounted(() => {
   margin-bottom: 22px;
 }
 
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  margin: 0;
+  dt {
+    font-size: 12px;
+    color: var(--c-text-2);
+  }
+  dd {
+    margin: 2px 0 0;
+    font-size: 22px;
+    font-weight: 700;
+    small {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--c-text-2);
+    }
+  }
+}
+.stats-loader {
+  display: grid;
+  place-items: center;
+  /* roughly the height of the stats grid, so the card does not jump when numbers arrive */
+  min-height: 150px;
+  color: var(--c-accent);
+}
+.link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--c-accent-strong);
+  font: inherit;
+  text-decoration: underline;
+}
 .tile {
   background: var(--c-surface);
   border-radius: 26px;

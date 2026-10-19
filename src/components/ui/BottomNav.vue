@@ -7,8 +7,6 @@ const tabs: { to: string; label: string; icon: FilledIconName }[] = [
   { to: '/results', label: 'Результаты', icon: 'questsDone' },
   { to: '/collection', label: 'Коллекция', icon: 'collection' },
   { to: '/profile', label: 'Профиль', icon: 'profile' },
-  // temporary home for quests until they get their own place in the design
-  { to: '/quests', label: 'Задания', icon: 'bell' },
 ]
 </script>
 

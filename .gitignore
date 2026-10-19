@@ -10,3 +10,6 @@ android/.gradle/
 ios/App/Pods/
 ios/DerivedData/
 .DS_Store
+
+# re-fetchable OSM extracts (npm run osm:fetch)
+data/osm/

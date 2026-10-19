@@ -8,9 +8,10 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    "allowImportingTsExtensions": true,
     "types": ["node"],
     "lib": ["ES2023", "DOM"],
     "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["vite.config.ts", "vitest.config.ts", "capacitor.config.ts", "tests/db/**/*.ts", "src/features/progression/**/*.ts"]
+  "include": ["vite.config.ts", "vitest.config.ts", "capacitor.config.ts", "tests/db/**/*.ts", "tools/**/*.ts", "src/services/exploration/grid.ts", "src/features/progression/**/*.ts"]
 }

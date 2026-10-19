@@ -52,3 +52,40 @@ export async function prepareAvatarImage(file: Blob): Promise<Blob> {
     bitmap.close()
   }
 }
+
+/** Album photos: limits match the `memory-photos` bucket (migration 010). */
+export const MEMORY_PHOTO_SIDE = 1600
+export const MEMORY_PHOTO_MAX_BYTES = 1536 * 1024
+
+/**
+ * Scales a photo so its longer side is at most 1600 px (no crop) and re-encodes it like avatars:
+ * WebP or JPEG, which drops EXIF — including the GPS position of where the photo was taken.
+ */
+export async function prepareMemoryPhoto(file: Blob): Promise<Blob> {
+  if (!file.type.startsWith('image/')) throw new AvatarImageFailure('not_image')
+  if (file.size > MAX_SOURCE_BYTES) throw new AvatarImageFailure('too_large')
+  let bitmap: ImageBitmap
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
+  } catch {
+    throw new AvatarImageFailure('unreadable')
+  }
+  try {
+    if (bitmap.width === 0 || bitmap.height === 0) throw new AvatarImageFailure('unreadable')
+    const scale = Math.min(1, MEMORY_PHOTO_SIDE / Math.max(bitmap.width, bitmap.height))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(bitmap.width * scale)
+    canvas.height = Math.round(bitmap.height * scale)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new AvatarImageFailure('unreadable')
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    for (const quality of [0.82, 0.7, 0.55]) {
+      let blob = await toBlob(canvas, 'image/webp', quality)
+      if (!blob || blob.type !== 'image/webp') blob = await toBlob(canvas, 'image/jpeg', quality)
+      if (blob && blob.size <= MEMORY_PHOTO_MAX_BYTES) return blob
+    }
+    throw new AvatarImageFailure('too_large')
+  } finally {
+    bitmap.close()
+  }
+}

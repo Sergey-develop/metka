@@ -14,7 +14,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:db": "vitest run --project db",
-    "cap:sync": "npm run build && cap sync"
+    "cap:sync": "npm run build && cap sync",
+    "osm:fetch": "node --experimental-strip-types tools/osm-import/fetch-overpass.ts",
+    "osm:import": "node --experimental-strip-types tools/osm-import/import.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
@@ -27,7 +29,6 @@
     "@fontsource-variable/inter": "^5.3.0",
     "@fontsource/doto": "^5.3.0",
     "@supabase/supabase-js": "^2.118.0",
-    "maplibre-gl": "^6.14.0",
     "onnxruntime-web": "^1.30.0",
     "pinia": "^4.1.0",
     "vue": "^3.5.44",
@@ -39,10 +40,12 @@
     "@electric-sql/pglite-pgvector": "^0.0.11",
     "@electric-sql/pglite-postgis": "^0.2.10",
     "@tsconfig/node22": "^22.0.6",
+    "@types/geojson": "7946.0.16",
     "@types/node": "^22.20.5",
     "@vitejs/plugin-vue": "^6.0.10",
     "@vue/test-utils": "^2.5.1",
     "@vue/tsconfig": "^0.9.1",
+    "@yandex/ymaps3-types": "1.0.21414904",
     "happy-dom": "^21.0.1",
     "sass": "^1.105.1",
     "typescript": "^6.0.3",

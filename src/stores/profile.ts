@@ -2,14 +2,17 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { services } from '@/app/providers/services'
 import { levelProgress } from '@/features/progression/levels'
-import { ApiError, toApiError } from '@/services/api/errors'
+import { ApiError, type ApiErrorCode, toApiError } from '@/services/api/errors'
 import type { AvatarKey, Profile, ProfileStats } from '@/types/game'
+import { type AvatarImageError, AvatarImageFailure, prepareAvatarImage } from '@/utils/avatarImage'
 import { useAuthStore } from './auth'
 
 export const useProfileStore = defineStore('profile', () => {
   const profile = ref<Profile | null>(null)
   const loading = ref(false)
   const error = ref<ApiError | null>(null)
+  const avatarBusy = ref(false)
+  const avatarError = ref<AvatarImageError | ApiErrorCode | null>(null)
 
   const progress = computed(() => levelProgress(profile.value?.xp ?? 0))
 
@@ -59,10 +62,50 @@ export const useProfileStore = defineStore('profile', () => {
     profile.value = await api.getProfile(userId)
   }
 
+  /** Re-encodes the picked picture and uploads it as the player's avatar. */
+  async function setAvatar(file: Blob): Promise<boolean> {
+    return changeAvatar(async (userId) => services().api.setProfileAvatar(userId, await prepareAvatarImage(file)))
+  }
+
+  const removeAvatar = () => changeAvatar(() => services().api.removeProfileAvatar())
+
+  async function changeAvatar(action: (userId: string) => Promise<void>): Promise<boolean> {
+    const userId = useAuthStore().userId
+    if (!userId || avatarBusy.value) return false
+    avatarBusy.value = true
+    avatarError.value = null
+    try {
+      await action(userId)
+      profile.value = await services().api.getProfile(userId)
+      return true
+    } catch (e) {
+      avatarError.value = e instanceof AvatarImageFailure ? e.code : toApiError(e).code
+      return false
+    } finally {
+      avatarBusy.value = false
+    }
+  }
+
   function reset(): void {
     profile.value = null
     error.value = null
+    avatarError.value = null
   }
 
-  return { profile, loading, error, progress, load, ensureLoaded, applyStats, rename, completeSetup, reset }
+  return {
+    profile,
+    loading,
+    error,
+    avatarBusy,
+    avatarError,
+    progress,
+    load,
+    ensureLoaded,
+    applyStats,
+    rename,
+    completeSetup,
+    setAvatar,
+    removeAvatar,
+    reset,
+  }
 })

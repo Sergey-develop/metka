@@ -6,6 +6,9 @@ import { useAuthStore } from '@/stores/auth'
 import { useClanStore } from '@/stores/clan'
 import { useCollectionStore } from '@/stores/collection'
 import { useMapStore } from '@/stores/map'
+import { useExplorationStore } from '@/stores/exploration'
+import { useMemoriesStore } from '@/stores/memories'
+import { useOutlinesStore } from '@/stores/outlines'
 import { useProfileStore } from '@/stores/profile'
 import { useQuestsStore } from '@/stores/quests'
 import { useScanStore } from '@/stores/scan'
@@ -16,7 +19,11 @@ const profile = useProfileStore()
 
 // brand splash while the stored session is restored (min. duration avoids a flash)
 const minSplashDone = ref(false)
-onMounted(() => setTimeout(() => (minSplashDone.value = true), 700))
+// dev only: `?splash` keeps the splash on screen to inspect the loader animation
+const holdSplash = import.meta.env.DEV && new URLSearchParams(location.search).has('splash')
+onMounted(() => {
+  if (!holdSplash) setTimeout(() => (minSplashDone.value = true), 700)
+})
 
 watch(
   () => auth.userId,
@@ -26,6 +33,9 @@ watch(
       // signed out or session expired: drop all per-user state
       profile.reset()
       useMapStore().reset()
+      useOutlinesStore().reset()
+      useMemoriesStore().reset()
+      void useExplorationStore().reset()
       useCollectionStore().reset()
       useQuestsStore().reset()
       useClanStore().reset()

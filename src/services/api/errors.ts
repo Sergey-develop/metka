@@ -3,6 +3,8 @@ import { errorCode, errorMessage } from '../shared'
 export type ApiErrorCode =
   | 'offline'
   | 'network'
+  /** request aborted by the caller (superseded viewport load); never retried or shown */
+  | 'cancelled'
   | 'unauthorized'
   | 'forbidden'
   | 'not_found'
@@ -27,6 +29,9 @@ export type ApiErrorCode =
   | 'invalid_location'
   | 'username_taken'
   | 'invalid_profile'
+  | 'building_locked'
+  | 'invalid_photo'
+  | 'invalid_memory'
 
 const DOMAIN_CODES = new Set<ApiErrorCode>([
   'quest_not_completed',
@@ -44,6 +49,9 @@ const DOMAIN_CODES = new Set<ApiErrorCode>([
   'invalid_location',
   'username_taken',
   'invalid_profile',
+  'building_locked',
+  'invalid_photo',
+  'invalid_memory',
 ])
 
 function isDomainCode(value: string): value is ApiErrorCode {
@@ -75,6 +83,9 @@ export function toApiError(error: unknown): ApiError {
   const message = errorMessage(error)
   const code = errorCode(error)
 
+  if ((error instanceof Error && error.name === 'AbortError') || /^AbortError\b/.test(message)) {
+    return new ApiError('cancelled', message, error)
+  }
   if (isOffline()) return new ApiError('offline', message, error)
   if (/failed to fetch|networkerror|network request failed|load failed|fetch failed/i.test(message)) {
     return new ApiError('network', message, error)
@@ -87,7 +98,8 @@ export function toApiError(error: unknown): ApiError {
   if (code === '42501') return new ApiError('forbidden', message, error)
   if (code === '23505') return new ApiError('conflict', message, error)
   if (code === '22023' || code === '23514' || code === '22P02') return new ApiError('validation', message, error)
-  if (code === 'PGRST116') return new ApiError('not_found', message, error)
+  // PGRST116: no row; PGRST202: RPC function missing (e.g. migration not applied) — never retried
+  if (code === 'PGRST116' || code === 'PGRST202') return new ApiError('not_found', message, error)
   return new ApiError('server', message, error)
 }
 

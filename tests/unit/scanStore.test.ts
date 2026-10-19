@@ -1,13 +1,18 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { services } from '@/app/providers/services'
 import { ApiError } from '@/services/api/errors'
 import { CameraError } from '@/services/camera/types'
 import { GeolocationError } from '@/services/geolocation/types'
 import { RecognitionError } from '@/services/recognition/types'
+import { useAuthStore } from '@/stores/auth'
 import { useMapStore } from '@/stores/map'
 import { useProfileStore } from '@/stores/profile'
-import { useScanStore } from '@/stores/scan'
+import { LOCATION_TEST_MODEL, useScanStore } from '@/stores/scan'
 import { BUILDING, decision, installFakeServices, recognitionResult } from './helpers'
+
+// canvas re-encoding is not available in happy-dom; the real function is covered by its own module
+vi.mock('@/utils/avatarImage', () => ({ prepareMemoryPhoto: vi.fn(async (b: Blob) => b) }))
 
 let fakes: ReturnType<typeof installFakeServices>
 
@@ -16,6 +21,7 @@ beforeEach(() => {
   fakes = installFakeServices()
   const map = useMapStore()
   map.buildings = new Map([[BUILDING.id, { ...BUILDING }]])
+  Object.assign(useAuthStore(), { session: { user: { id: 'user-1' } } })
 })
 
 function startScan() {
@@ -48,6 +54,75 @@ describe('scan store', () => {
     const submission = fakes.api.submitScan.mock.calls[0]![0]
     expect(submission).toMatchObject({ buildingId: BUILDING.id, modelVersion: 'test-v1', accuracyM: 10 })
     expect(submission.imageSha256).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  it('TEST mode: without a recognition model, a listed tester scans by location + photo', async () => {
+    fakes.recognition.isAvailable.mockReturnValue(false)
+    Object.assign(services().api, { isLocationScanTester: vi.fn(async () => true) })
+    const scan = startScan()
+    await scan.capture()
+    expect(scan.locationTestMode).toBe(true)
+    expect(fakes.recognition.recognize).not.toHaveBeenCalled()
+    const submission = fakes.api.submitScan.mock.calls[0]![0]
+    expect(submission).toMatchObject({ buildingId: BUILDING.id, modelVersion: LOCATION_TEST_MODEL, accuracyM: 10 })
+    expect(submission.embedding).toHaveLength(0)
+    expect(submission.imageSha256).toMatch(/^[0-9a-f]{64}$/)
+    expect(scan.decision?.status).toBe('accepted') // the server decides, as always
+  })
+
+  it('without a model, regular players still get "recognition unavailable"', async () => {
+    fakes.recognition.isAvailable.mockReturnValue(false)
+    Object.assign(services().api, { isLocationScanTester: vi.fn(async () => false) })
+    const scan = startScan()
+    await scan.capture()
+    expect(scan.failure).toEqual({ kind: 'recognition_unavailable' })
+    expect(fakes.api.submitScan).not.toHaveBeenCalled()
+  })
+
+  it('web: opens the camera synchronously inside the tap (iOS Safari ignores it after an await)', async () => {
+    Object.defineProperty(fakes.camera, 'requiresUserGesture', { value: true })
+    const takePhoto = vi.spyOn(fakes.camera, 'takePhoto')
+    const scan = startScan()
+    const running = scan.capture() // not awaited: we are still "inside the tap"
+    expect(takePhoto).toHaveBeenCalledTimes(1)
+    await running
+    expect(takePhoto).toHaveBeenCalledTimes(1) // the same photo is used, no second picker
+    expect(scan.decision?.status).toBe('accepted')
+  })
+
+  it('cancel during capture returns to ready and ignores the late photo', async () => {
+    let deliver: (p: { blob: Blob; previewUrl: string }) => void = () => undefined
+    vi.spyOn(fakes.camera, 'takePhoto').mockImplementation(() => new Promise((r) => (deliver = r)))
+    const scan = startScan()
+    const running = scan.capture()
+    await vi.waitFor(() => expect(scan.phase).toBe('capturing'))
+    scan.cancel()
+    expect(scan.phase).toBe('ready')
+    deliver({ blob: new Blob(['x'], { type: 'image/jpeg' }), previewUrl: 'blob:x' })
+    await running
+    expect(scan.phase).toBe('ready')
+    expect(fakes.api.submitScan).not.toHaveBeenCalled()
+  })
+
+  it('keeps the scan photo for the collection after an accepted scan; a failed upload changes nothing', async () => {
+    const setPhoto = vi.mocked(services().api.setDiscoveryPhoto)
+    setPhoto.mockRejectedValueOnce(new Error('offline'))
+    const scan = startScan()
+    await scan.capture()
+    await vi.waitFor(() => expect(setPhoto).toHaveBeenCalledWith('user-1', BUILDING.id, expect.any(Blob), true))
+    expect(scan.decision?.status).toBe('accepted') // the discovery stands regardless of the photo
+  })
+
+  it('re-scan of a discovered building adds a photo only if missing; rejected scans upload nothing', async () => {
+    const setPhoto = vi.mocked(services().api.setDiscoveryPhoto)
+    fakes.api.submitScan.mockResolvedValueOnce(decision({ status: 'already_discovered', reward: null }))
+    await startScan().capture()
+    await vi.waitFor(() => expect(setPhoto).toHaveBeenLastCalledWith('user-1', BUILDING.id, expect.any(Blob), false))
+    setPhoto.mockClear()
+    fakes.api.submitScan.mockResolvedValueOnce(decision({ status: 'rejected', reason: 'too_far', reward: null }))
+    await startScan().capture()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(setPhoto).not.toHaveBeenCalled()
   })
 
   it('reports denied camera permission', async () => {

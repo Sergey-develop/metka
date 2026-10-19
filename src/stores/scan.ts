@@ -9,7 +9,10 @@ import { RecognitionError, type RecognitionResult } from '@/services/recognition
 import type { MapBuilding, ScanDecision, ScanSubmission } from '@/types/game'
 import { allowedScanDistance, distanceMeters, MAX_ACCURACY_M } from '@/utils/geo'
 import { useCollectionStore } from './collection'
+import { prepareMemoryPhoto } from '@/utils/avatarImage'
+import { useAuthStore } from './auth'
 import { useMapStore } from './map'
+import { useOutlinesStore } from './outlines'
 import { useProfileStore } from './profile'
 import { useQuestsStore } from './quests'
 
@@ -32,7 +35,15 @@ export type ScanFailure =
   | { kind: 'network' }
   | { kind: 'server'; message: string }
 
+/** model_version accepted by submit_building_scan for listed testers only (migration 009) */
+export const LOCATION_TEST_MODEL = 'location-test-v1'
+
 export const useScanStore = defineStore('scan', () => {
+  /** bumped by every capture() and cancel(): results of an abandoned attempt are dropped */
+  let runId = 0
+  /** TEST ONLY: this account scans by location without recognition (see checkLocationTester) */
+  const locationTestMode = ref(false)
+  let testerCheck: Promise<boolean> | null = null
   const phase = ref<ScanPhase>('ready')
   const buildingId = ref<string | null>(null)
   const failure = ref<ScanFailure | null>(null)
@@ -135,25 +146,59 @@ export const useScanStore = defineStore('scan', () => {
     return fix
   }
 
+  /**
+   * TEST ONLY: while there is no recognition model (ADR-001), accounts listed in
+   * location_scan_testers scan by location + photo; the server checks the list (migration 009).
+   */
+  async function checkLocationTester(): Promise<boolean> {
+    // any failure (offline, old server without migration 009) means "not a tester"
+    testerCheck ??= (async () => services().api.isLocationScanTester())().catch(() => false)
+    locationTestMode.value = await testerCheck
+    return locationTestMode.value
+  }
+
   /** Full flow: permissions -> location -> photo -> recognition -> server verdict. */
   async function capture(): Promise<void> {
     const target = building.value
     if (!target) return fail({ kind: 'building_unknown' })
     const { camera, recognition: recognizer } = services()
-    if (!recognizer.isAvailable()) return fail({ kind: 'recognition_unavailable' })
+    const run = ++runId
+    // Web: open the camera picker right now, inside the tap — after any await Safari ignores it.
+    // Location is determined while the player takes the photo.
+    const canProceedNow = recognizer.isAvailable() || locationTestMode.value
+    const earlyPhoto = camera.requiresUserGesture && canProceedNow ? camera.takePhoto() : null
+    let earlyPhotoUsed = false
+    earlyPhoto?.then(
+      (p) => {
+        if (!earlyPhotoUsed) camera.release(p) // flow stopped earlier (too far, cancelled…)
+      },
+      () => undefined,
+    )
+
+    const locationTest = !recognizer.isAvailable() && (await checkLocationTester())
+    if (run !== runId) return
+    if (!recognizer.isAvailable() && !locationTest) return fail({ kind: 'recognition_unavailable' })
 
     failure.value = null
     recognition.value = null
     decision.value = null
     if (!(await ensurePermissions())) return
+    if (run !== runId) return
     const fix = await locate(target)
-    if (!fix) return
+    if (!fix || run !== runId) return
 
     phase.value = 'capturing'
     releasePhoto()
     try {
-      photo.value = await camera.takePhoto()
+      earlyPhotoUsed = true
+      const taken = await (earlyPhoto ?? camera.takePhoto())
+      if (run !== runId) {
+        camera.release(taken)
+        return
+      }
+      photo.value = taken
     } catch (e) {
+      if (run !== runId) return
       const code = e instanceof CameraError ? e.code : 'failed'
       if (code === 'cancelled') {
         phase.value = 'ready'
@@ -162,6 +207,22 @@ export const useScanStore = defineStore('scan', () => {
       return fail({
         kind: code === 'permission_denied' ? 'camera_denied' : code === 'unavailable' ? 'camera_unavailable' : 'camera_failed',
       })
+    }
+
+    if (locationTest) {
+      pendingSubmission.value = {
+        clientRequestId: crypto.randomUUID(),
+        buildingId: target.id,
+        lat: fix.lat,
+        lng: fix.lng,
+        accuracyM: fix.accuracyM,
+        modelVersion: LOCATION_TEST_MODEL,
+        embedding: new Float32Array(0),
+        imageSha256: await sha256Hex(photo.value.blob),
+        quality: null,
+      }
+      await submit()
+      return
     }
 
     phase.value = 'analyzing'
@@ -209,6 +270,18 @@ export const useScanStore = defineStore('scan', () => {
     await submit()
   }
 
+  async function attachDiscoveryPhoto(buildingId: string, blob: Blob, replace: boolean): Promise<void> {
+    const userId = useAuthStore().userId
+    if (!userId) return
+    try {
+      const image = await prepareMemoryPhoto(blob)
+      await services().api.setDiscoveryPhoto(userId, buildingId, image, replace)
+      useCollectionStore().invalidate()
+    } catch {
+      // the building stays discovered; it just has no photo in the collection
+    }
+  }
+
   /** Sends (or re-sends with the same idempotency key) the pending submission. */
   async function submit(): Promise<void> {
     const submission = pendingSubmission.value
@@ -229,7 +302,10 @@ export const useScanStore = defineStore('scan', () => {
     phase.value = 'done'
 
     if (verdict.status === 'accepted' || verdict.status === 'already_discovered') {
+      // keep the photo for the collection (best effort: the discovery itself is already confirmed)
+      if (photo.value) void attachDiscoveryPhoto(submission.buildingId, photo.value.blob, verdict.status === 'accepted')
       useMapStore().markDiscovered(submission.buildingId)
+      useOutlinesStore().markDiscovered(submission.buildingId)
       useCollectionStore().invalidate()
     }
     if (verdict.status === 'accepted') {
@@ -244,9 +320,12 @@ export const useScanStore = defineStore('scan', () => {
     return capture()
   }
 
+  /** Abandons the current attempt at any step (a late photo or GPS result is ignored). */
   function cancel(): void {
+    runId++
     controller?.abort()
     controller = null
+    if (phase.value === 'locating' || phase.value === 'capturing') phase.value = 'ready'
   }
 
   function confirmCamera(): Promise<void> {
@@ -269,6 +348,8 @@ export const useScanStore = defineStore('scan', () => {
   }
 
   function reset(): void {
+    testerCheck = null
+    locationTestMode.value = false
     cancel()
     releasePhoto()
     cameraPrompt.value = false
@@ -283,6 +364,8 @@ export const useScanStore = defineStore('scan', () => {
 
   return {
     phase,
+    locationTestMode,
+    checkLocationTester,
     buildingId,
     building,
     failure,

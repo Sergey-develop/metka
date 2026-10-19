@@ -423,6 +423,69 @@ describe('clans', () => {
   })
 })
 
+describe('profile avatars', () => {
+  const upload = (userId: string, name: string) =>
+    t.asUser(userId, (tx) =>
+      tx.query(`insert into storage.objects (bucket_id, name, owner) values ('profile-avatars', $1, $2)`, [name, userId]),
+    )
+  const setAvatar = (userId: string, path: string | null) =>
+    t.asUser(userId, async (tx) => (await tx.query<{ old: string | null }>(`select public.set_profile_avatar($1) as old`, [path])).rows[0]!.old)
+
+  it('lets a player upload into their own folder and replace the avatar', async () => {
+    const u = await newUser()
+    const first = `${u}/${randomUUID()}.webp`
+    await upload(u, first)
+    expect(await setAvatar(u, first)).toBeNull()
+
+    const second = `${u}/${randomUUID()}.jpg`
+    await upload(u, second)
+    expect(await setAvatar(u, second)).toBe(first) // old path returned for cleanup
+
+    const row = await t.db.query<{ avatar_path: string }>(`select avatar_path from public.profiles where id = $1`, [u])
+    expect(row.rows[0]?.avatar_path).toBe(second)
+
+    expect(await setAvatar(u, null)).toBe(second)
+    const cleared = await t.db.query<{ avatar_path: string | null }>(`select avatar_path from public.profiles where id = $1`, [u])
+    expect(cleared.rows[0]?.avatar_path).toBeNull()
+  })
+
+  it("rejects other players' folders, missing files and odd paths", async () => {
+    const a = await newUser()
+    const b = await newUser()
+    await expect(upload(a, `${b}/${randomUUID()}.webp`)).rejects.toThrow(/row-level security/)
+    await expect(upload(a, `${randomUUID()}.webp`)).rejects.toThrow(/row-level security/)
+
+    const foreign = `${b}/${randomUUID()}.webp`
+    await upload(b, foreign)
+    await expect(setAvatar(a, foreign)).rejects.toThrow(/invalid_avatar/)
+    await expect(setAvatar(a, `${a}/${randomUUID()}.webp`)).rejects.toThrow(/invalid_avatar/) // not uploaded
+    await expect(setAvatar(a, `${a}/../x.webp`)).rejects.toThrow(/invalid_avatar/)
+    await expect(t.asUser(null, (tx) => tx.query(`select public.set_profile_avatar(null)`))).rejects.toThrow(/permission denied/)
+
+    const deletedByOther = await t.asUser(a, (tx) =>
+      tx.query(`delete from storage.objects where bucket_id = 'profile-avatars' and name = $1`, [foreign]),
+    )
+    expect(deletedByOther.affectedRows).toBe(0)
+    const deletedByOwner = await t.asUser(b, (tx) =>
+      tx.query(`delete from storage.objects where bucket_id = 'profile-avatars' and name = $1`, [foreign]),
+    )
+    expect(deletedByOwner.affectedRows).toBe(1)
+  })
+
+  it('does not let the client write the avatar path or an external URL directly', async () => {
+    const u = await newUser()
+    const path = `${u}/${randomUUID()}.webp`
+    await upload(u, path)
+    await expect(
+      t.asUser(u, (tx) => tx.query(`update public.profiles set avatar_path = $1 where id = $2`, [path, u])),
+    ).rejects.toThrow(/permission denied/)
+    const cols = await t.db.query(
+      `select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'avatar_url'`,
+    )
+    expect(cols.rows).toHaveLength(0)
+  })
+})
+
 describe('map queries', () => {
   it('returns buildings in a bbox with the caller discovery flag', async () => {
     const u = await newUser()

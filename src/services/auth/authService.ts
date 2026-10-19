@@ -56,7 +56,7 @@ export class AuthService {
   ) {}
 
   private redirectUrl(path: string): string {
-    return Capacitor.isNativePlatform() ? this.config.nativeAuthRedirect : `${window.location.origin}${path}`
+    return Capacitor.isNativePlatform() ? this.config.nativeAuthRedirect : `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, '')}${path}`
   }
 
   async getSession(): Promise<Session | null> {
