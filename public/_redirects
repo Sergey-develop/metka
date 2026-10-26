@@ -1,0 +1,2 @@
+# Netlify: the app is a single page; every path is served index.html (router decides)
+/*    /index.html   200

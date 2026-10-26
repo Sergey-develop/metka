@@ -79,7 +79,7 @@ function swipe(dir: -1 | 1): void {
 <template>
   <div class="deck">
     <article v-if="upcoming" :key="upcoming.id" class="card card--under" aria-hidden="true">
-      <img v-if="photo(upcoming)" :src="photo(upcoming)!" alt="" :class="{ locked: !upcoming.discoveredAt }" />
+      <img v-if="photo(upcoming)" :src="photo(upcoming)!" alt="" />
     </article>
     <article
       v-if="current"
@@ -98,7 +98,7 @@ function swipe(dir: -1 | 1): void {
       @keydown.right.prevent="swipe(1)"
       @keydown.enter="emit('open', current)"
     >
-      <img v-if="photo(current)" :src="photo(current)!" alt="" draggable="false" :class="{ locked: !current.discoveredAt }" />
+      <img v-if="photo(current)" :src="photo(current)!" alt="" draggable="false" />
       <div class="card__shade" aria-hidden="true" />
       <div
         v-if="hint"
@@ -164,11 +164,6 @@ function swipe(dir: -1 | 1): void {
     height: 100%;
     object-fit: cover;
     pointer-events: none;
-    &.locked {
-      // the same rule as in the gallery: undiscovered places are blurred
-      filter: blur(14px);
-      transform: scale(1.15);
-    }
   }
 }
 .card__shade {

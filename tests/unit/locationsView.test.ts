@@ -37,14 +37,15 @@ beforeEach(() => {
 })
 
 describe('LocationsView', () => {
-  it('lists discovered places first and blurs locked ones', async () => {
+  it('lists discovered places first; every photo is shown as is, without blur or lock', async () => {
     const { w } = await mountView()
     expect(w.text()).toContain('Все (3)')
     const places = w.findAll('.place')
     expect(places).toHaveLength(3)
     expect(places[0]!.find('.place__name').text()).toBe(BUILDING.name)
     expect(places[0]!.find('.place__fav').exists()).toBe(true)
-    expect(places[1]!.find('.place__photo--locked').exists()).toBe(true)
+    expect(w.find('.place__photo--locked').exists()).toBe(false)
+    expect(w.find('.place__lock').exists()).toBe(false)
     expect(places[1]!.find('.place__fav').exists()).toBe(false)
   })
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import CoinIcon from '@/components/ui/CoinIcon.vue'
@@ -35,8 +35,27 @@ const nearby = computed(() => {
 })
 
 const expanded = ref(false)
-/** long enough to be clamped at six lines (≈ the mockup's paragraph) */
-const longText = computed(() => (building.value?.description?.length ?? 0) > 220)
+/** six lines of .ld__text (line-height 20px), as the mockup's paragraph */
+const COLLAPSED_PX = 120
+const textEl = ref<HTMLElement | null>(null)
+/** the full height of the description, measured; the button shows only when it is taller than six lines */
+const fullHeight = ref(0)
+const overflowing = computed(() => fullHeight.value > COLLAPSED_PX + 2)
+
+function measure(): void {
+  fullHeight.value = textEl.value?.scrollHeight ?? 0
+}
+watch(
+  () => building.value?.description,
+  () => void nextTick(measure),
+  { immediate: true },
+)
+// the text reflows with the width and once the web font arrives
+onMounted(() => {
+  window.addEventListener('resize', measure)
+  void document.fonts?.ready.then(measure)
+})
+onBeforeUnmount(() => window.removeEventListener('resize', measure))
 
 watch(
   () => props.id,
@@ -78,7 +97,7 @@ onMounted(loadAll)
 <template>
   <main class="ld">
     <template v-if="building">
-      <div class="ld__hero" :class="{ 'ld__hero--locked': !building.discoveredAt }">
+      <div class="ld__hero">
         <img v-if="photo(building)" :src="photo(building)!" alt="" />
         <button class="ld__round ld__back" aria-label="Назад" @click="back"><AppIcon name="back" :size="22" /></button>
         <div class="ld__actions">
@@ -100,10 +119,6 @@ onMounted(loadAll)
             <AppIcon v-else name="check" :size="20" />
           </button>
         </div>
-        <span v-if="!building.discoveredAt" class="ld__lock">
-          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 10V8a5 5 0 0 1 10 0v2h.5A1.5 1.5 0 0 1 19 11.5v8a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5v-8A1.5 1.5 0 0 1 6.5 10H7Zm2.5 0h5V8a2.5 2.5 0 0 0-5 0v2Z" /></svg>
-          Ещё не открыто
-        </span>
       </div>
 
       <article class="ld__sheet">
@@ -116,8 +131,15 @@ onMounted(loadAll)
         <p v-if="walkTime(distance(building))" class="ld__meta"><FilledIcon name="runner" :size="18" />{{ walkTime(distance(building)) }}</p>
 
         <div v-if="building.description" class="ld__about">
-          <p class="ld__text" :class="{ 'ld__text--clamped': longText && !expanded }">{{ building.description }}</p>
-          <button v-if="longText" class="ld__more" @click="expanded = !expanded">{{ expanded ? 'Свернуть' : 'Читать больше' }}</button>
+          <p
+            ref="textEl"
+            class="ld__text"
+            :class="{ 'ld__text--clamped': overflowing && !expanded }"
+            :style="overflowing ? { maxHeight: `${expanded ? fullHeight : COLLAPSED_PX}px` } : undefined"
+          >{{ building.description }}</p>
+          <button v-if="overflowing" class="ld__more" :aria-expanded="expanded" @click="expanded = !expanded">
+            {{ expanded ? 'Свернуть' : 'Читать больше' }}
+          </button>
         </div>
 
         <ul class="ld__rewards" aria-label="Награды за открытие">
@@ -160,7 +182,7 @@ onMounted(loadAll)
           <ul class="near">
             <li v-for="n in nearby" :key="n.building.id">
               <RouterLink :to="{ name: 'location', params: { id: n.building.id } }" class="near__card">
-                <span class="near__photo" :class="{ 'near__photo--locked': !n.building.discoveredAt }">
+                <span class="near__photo">
                   <img v-if="photo(n.building)" :src="photo(n.building)!" alt="" />
                 </span>
                 <span class="near__name">{{ n.building.name }}</span>
@@ -216,10 +238,6 @@ $blue: #0189ff;
     height: 100%;
     object-fit: cover;
   }
-  &--locked img {
-    filter: blur(14px);
-    transform: scale(1.15); // hides the blur's soft edge
-  }
 }
 .ld__round {
   width: 40px;
@@ -262,21 +280,6 @@ $blue: #0189ff;
     fill: currentColor;
   }
 }
-.ld__lock {
-  position: absolute;
-  right: 16px;
-  bottom: 40px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: rgb(0 0 0 / 35%);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 500;
-}
-
 .ld__sheet {
   position: relative;
   margin-top: -20px;
@@ -340,11 +343,18 @@ $blue: #0189ff;
   line-height: 20px;
   color: #000;
   white-space: pre-line;
+  overflow: hidden;
+  // opens and closes smoothly: max-height goes between six lines and the measured full height
+  transition: max-height 0.35s cubic-bezier(0.22, 1, 0.36, 1);
   &--clamped {
-    display: -webkit-box;
-    -webkit-line-clamp: 6;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    // the last visible line fades out instead of being cut
+    mask-image: linear-gradient(#000 calc(100% - 20px), transparent);
+    -webkit-mask-image: linear-gradient(#000 calc(100% - 20px), transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ld__text {
+    transition: none;
   }
 }
 .ld__more {
@@ -465,10 +475,6 @@ $blue: #0189ff;
     width: 100%;
     height: 100%;
     object-fit: cover;
-  }
-  &--locked img {
-    filter: blur(14px);
-    transform: scale(1.15);
   }
 }
 .near__name {

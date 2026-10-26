@@ -31,7 +31,10 @@ const isLogin = computed(() => props.mode === 'login')
 const submitLabel = computed(() => (isLogin.value ? 'Войти' : 'Продолжить'))
 const formatted = computed(() => formatRuPhone(digits.value))
 const canRequest = computed(() => isCompleteRuPhone(digits.value))
-const canVerify = computed(() => new RegExp(`^\\d{${SMS_CODE_LENGTH}}$`).test(code.value))
+/** test mode: the fixed code (no SMS), else the SMS code length */
+const fixedCode = config.phoneFixedCode
+const codeLength = fixedCode?.length ?? SMS_CODE_LENGTH
+const canVerify = computed(() => new RegExp(`^\\d{${codeLength}}$`).test(code.value))
 const cooldownText = computed(() => {
   const pad = (n: number): string => String(n).padStart(2, '0')
   return `${pad(Math.floor(cooldown.value / 60))}:${pad(cooldown.value % 60)}`
@@ -64,7 +67,7 @@ function onPhoneInput(event: Event): void {
 
 function onCodeInput(event: Event): void {
   const input = event.target as HTMLInputElement
-  code.value = input.value.replace(/\D/g, '').slice(0, SMS_CODE_LENGTH)
+  code.value = input.value.replace(/\D/g, '').slice(0, codeLength)
   input.value = code.value
   if (canVerify.value) void verify()
 }
@@ -186,7 +189,7 @@ onUnmounted(() => {
           Введите код подтверждения, отправленный на номер<br />
           <strong>+7 {{ formatted }}</strong>
         </p>
-        <label class="code" :style="{ '--cells': SMS_CODE_LENGTH }">
+        <label class="code" :style="{ '--cells': codeLength }">
           <span class="visually-hidden">Код из SMS</span>
           <input
             ref="codeInput"
@@ -195,18 +198,18 @@ onUnmounted(() => {
             type="text"
             inputmode="numeric"
             autocomplete="one-time-code"
-            :maxlength="SMS_CODE_LENGTH"
+            :maxlength="codeLength"
             @input="onCodeInput"
           />
           <span
-            v-for="i in SMS_CODE_LENGTH"
+            v-for="i in codeLength"
             :key="i"
             class="code__cell"
             :class="{ 'code__cell--now': i - 1 === code.length }"
             aria-hidden="true"
           >{{ code[i - 1] ?? '' }}</span>
         </label>
-        <p class="hero__resend">
+        <p v-if="!fixedCode" class="hero__resend">
           <template v-if="cooldown > 0">Отправить код повторно через {{ cooldownText }}</template>
           <button v-else type="button" :disabled="pending" @click="requestCode">Отправить код повторно</button>
         </p>

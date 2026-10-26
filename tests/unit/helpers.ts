@@ -15,6 +15,7 @@ export const CONFIG: AppConfig = {
   privacyPolicyUrl: null,
   useMocks: false,
   nativeAuthRedirect: 'app.metka.game://auth/callback',
+  phoneFixedCode: null,
 }
 
 export const BUILDING: MapBuilding = {

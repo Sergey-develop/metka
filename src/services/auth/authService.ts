@@ -11,6 +11,8 @@ export type AuthErrorCode =
   | 'rate_limited'
   | 'invalid_phone'
   | 'phone_unavailable'
+  /** the number already has an account without a password (e.g. from SMS sign-in) */
+  | 'phone_taken'
   | 'network'
   | 'session_expired'
   | 'unknown'
@@ -35,7 +37,7 @@ export function mapAuthError(error: AuthError | Error): AppAuthError {
   if (code === 'otp_expired' || code === 'otp_disabled' || /token has expired or is invalid/i.test(message)) {
     return new AppAuthError('invalid_code', message)
   }
-  if (code === 'user_already_exists' || code === 'email_exists' || /already registered/i.test(message)) {
+  if (code === 'user_already_exists' || code === 'email_exists' || code === 'phone_exists' || /already registered/i.test(message)) {
     return new AppAuthError('user_exists', message)
   }
   if (code === 'sms_send_failed' || code === 'phone_provider_disabled' || /sms provider|unsupported phone provider/i.test(message)) {
@@ -117,13 +119,36 @@ export class AuthService {
    * @param phone E.164, e.g. +79991234567
    */
   async requestPhoneCode(phone: string): Promise<void> {
+    // test mode: nothing is sent, the code is always config.phoneFixedCode
+    if (this.config.phoneFixedCode) return
     const { error } = await this.client.auth.signInWithOtp({ phone, options: { shouldCreateUser: true, channel: 'sms' } })
     if (error) throw mapAuthError(error)
   }
 
   async verifyPhoneCode(phone: string, code: string): Promise<void> {
+    if (this.config.phoneFixedCode) return this.signInWithFixedCode(phone, code, this.config.phoneFixedCode)
     const { error } = await this.client.auth.verifyOtp({ phone, token: code, type: 'sms' })
     if (error) throw mapAuthError(error)
+  }
+
+  /**
+   * Test mode: phone + password accounts whose password is derived from the fixed code. Signs in, or
+   * registers an unknown number. Needs Supabase Auth → Phone enabled with "Confirm phone" off, so
+   * sign-up returns a session without an SMS.
+   */
+  private async signInWithFixedCode(phone: string, code: string, fixed: string): Promise<void> {
+    if (code !== fixed) throw new AppAuthError('invalid_code')
+    const password = `metka-phone-${fixed}`
+    const signIn = await this.client.auth.signInWithPassword({ phone, password })
+    if (!signIn.error) return
+    const signInError = mapAuthError(signIn.error)
+    if (signInError.code !== 'invalid_credentials') throw signInError
+    const { data, error } = await this.client.auth.signUp({ phone, password })
+    if (error) {
+      const signUpError = mapAuthError(error)
+      throw signUpError.code === 'user_exists' ? new AppAuthError('phone_taken', error.message) : signUpError
+    }
+    if (!data.session) throw new AppAuthError('phone_unavailable', 'phone sign-up needs "Confirm phone" off')
   }
 
   async signIn(email: string, password: string): Promise<void> {

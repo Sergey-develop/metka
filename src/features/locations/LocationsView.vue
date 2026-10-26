@@ -157,11 +157,8 @@ onMounted(loadAll)
             <StateBlock v-else-if="list.length === 0" kind="empty" title="Мест пока нет" />
             <ul v-else class="places">
               <li v-for="b in list" :key="b.id" class="place">
-                <div class="place__photo" :class="{ 'place__photo--locked': !b.discoveredAt }" role="button" tabindex="0" :aria-label="`${b.name}: подробнее`" @click="openPlace(b)" @keydown.enter="openPlace(b)">
+                <div class="place__photo" role="button" tabindex="0" :aria-label="`${b.name}: подробнее`" @click="openPlace(b)" @keydown.enter="openPlace(b)">
                   <img v-if="photo(b)" :src="photo(b)!" alt="" />
-                  <span v-if="!b.discoveredAt" class="place__lock" aria-hidden="true">
-                    <svg width="22" height="22" viewBox="0 0 24 24"><path fill="#fff" d="M7 10V8a5 5 0 0 1 10 0v2h.5A1.5 1.5 0 0 1 19 11.5v8a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5v-8A1.5 1.5 0 0 1 6.5 10H7Zm2.5 0h5V8a2.5 2.5 0 0 0-5 0v2Z" /></svg>
-                  </span>
                 </div>
                 <button
                   v-if="b.discoveredAt"
@@ -457,16 +454,6 @@ $card: #f3f3f9;
     height: 100%;
     object-fit: cover;
   }
-  &--locked img {
-    filter: blur(14px);
-    transform: scale(1.15); // hides the blur's soft edge
-  }
-}
-.place__lock {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
 }
 .place__fav {
   position: absolute;

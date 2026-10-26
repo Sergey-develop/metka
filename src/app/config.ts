@@ -15,6 +15,12 @@ export interface AppConfig {
   useMocks: boolean
   /** deep link used for OAuth / password reset on iOS and Android */
   nativeAuthRedirect: string
+  /**
+   * Test sign-in by phone: no SMS is sent and this code is always the right one (unknown numbers are
+   * registered). Anyone who knows a number can enter its account — not for a public release.
+   * null = real SMS codes through Supabase.
+   */
+  phoneFixedCode: string | null
 }
 
 export type ConfigResult = { ok: true; config: AppConfig } | { ok: false; missing: string[] }
@@ -30,10 +36,20 @@ interface EnvLike {
   VITE_AUTH_OAUTH_PROVIDERS?: string
   VITE_PRIVACY_POLICY_URL?: string
   VITE_USE_MOCKS?: string
+  /** fixed phone code (4–8 digits); unset = 1111, "off" = real SMS */
+  VITE_PHONE_FIXED_CODE?: string
 }
 
 function isOAuthProvider(value: string): value is OAuthProvider {
   return (OAUTH_PROVIDERS as readonly string[]).includes(value)
+}
+
+/** the test-mode phone code: 1111 unless set; "off" (or anything but 4–8 digits) turns it off */
+export const DEFAULT_PHONE_FIXED_CODE = '1111'
+function phoneFixedCode(value: string | undefined): string | null {
+  if (value === undefined) return DEFAULT_PHONE_FIXED_CODE
+  const code = value.trim()
+  return /^\d{4,8}$/.test(code) ? code : null
 }
 
 function httpsUrl(value: string | undefined): string | null {
@@ -65,6 +81,7 @@ export function readConfig(env: EnvLike): ConfigResult {
       privacyPolicyUrl: httpsUrl(env.VITE_PRIVACY_POLICY_URL),
       useMocks: env.DEV && env.VITE_USE_MOCKS === 'true',
       nativeAuthRedirect: NATIVE_AUTH_REDIRECT,
+      phoneFixedCode: phoneFixedCode(env.VITE_PHONE_FIXED_CODE),
     },
   }
 }

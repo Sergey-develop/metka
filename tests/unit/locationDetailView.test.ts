@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import LocationDetailView from '@/features/locations/LocationDetailView.vue'
 import { services } from '@/app/providers/services'
@@ -52,9 +52,34 @@ describe('LocationDetailView', () => {
     expect(w.find('.ld__scan').exists()).toBe(false)
   })
 
-  it('offers the scan for a locked place and hides the heart', async () => {
+  it('«Читать больше» shows only when the text is taller than six lines, and opens to its full height', async () => {
+    const tall = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+    try {
+      tall.mockReturnValue(100) // five lines: nothing to expand
+      const short = await mountView()
+      expect(short.w.find('.ld__more').exists()).toBe(false)
+      expect(short.w.find('.ld__text').attributes('style')).toBeUndefined()
+      short.w.unmount()
+
+      tall.mockReturnValue(300)
+      const { w } = await mountView()
+      const text = () => w.find('.ld__text')
+      expect(w.find('.ld__more').text()).toBe('Читать больше')
+      expect(text().attributes('style')).toContain('max-height: 120px')
+      expect(text().classes()).toContain('ld__text--clamped')
+      await w.find('.ld__more').trigger('click')
+      expect(text().attributes('style')).toContain('max-height: 300px')
+      expect(text().classes()).not.toContain('ld__text--clamped')
+      expect(w.find('.ld__more').text()).toBe('Свернуть')
+    } finally {
+      tall.mockRestore()
+    }
+  })
+
+  it('offers the scan for an undiscovered place and hides the heart, without blur or lock', async () => {
     const { w } = await mountView('near')
-    expect(w.find('.ld__hero--locked').exists()).toBe(true)
+    expect(w.find('.ld__hero--locked').exists()).toBe(false)
+    expect(w.find('.ld__lock').exists()).toBe(false)
     expect(w.find('.ld__fav').exists()).toBe(false)
     expect(w.find('.ld__scan').attributes('href')).toBe('/scan/near')
   })
