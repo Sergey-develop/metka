@@ -31,12 +31,13 @@ withDefaults(
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 52px;
+  // as in the mockups: saturated blue, 50pt high, slightly rounded (theme: --c-button, --r-button)
+  height: 50px;
   padding: 0 22px;
   border: 0;
-  border-radius: var(--r-pill);
-  font-weight: 600;
-  font-size: 16px;
+  border-radius: var(--r-button);
+  font-weight: 500;
+  font-size: 17px;
   transition: transform 0.12s var(--ease), opacity 0.15s var(--ease), background 0.15s var(--ease);
 
   &:active:not(:disabled) {
@@ -50,12 +51,12 @@ withDefaults(
     width: 100%;
   }
   &--primary {
-    background: var(--c-accent);
-    color: var(--c-accent-contrast);
+    background: var(--c-button);
+    color: #fff;
   }
   &--secondary {
-    background: var(--c-surface-2);
-    color: var(--c-text);
+    background: var(--c-button-soft);
+    color: #000;
   }
   &--ghost {
     background: transparent;

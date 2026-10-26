@@ -179,6 +179,15 @@ describe('BuildingInfoSheet', () => {
     expect(sheet({ distanceM: 42 }).find('.info__distance').text()).toContain('≈40 м')
   })
 
+  it('compact: an "interesting fact" strip from real data only; the chevron expands', async () => {
+    const w = sheet()
+    expect(w.find('.info__fact').text()).toBe('Интересный факт: здание построено в 1976 году.')
+    expect(sheet({ info: { state: 'ready', facts: { ...FACTS, built: null, series: null, levels: 5 } } }).find('.info__fact').exists()).toBe(false)
+    await w.find('.info__more').trigger('click')
+    expect(w.emitted('update:expanded')).toEqual([[true]])
+    expect(w.find('.info__close').exists()).toBe(false) // closing is a tap on the camera view
+  })
+
   it('expanded: real facts, empty organisations explained, OSM source with date', async () => {
     const w = sheet({ expanded: true })
     const facts = w.findAll('.info__facts div').map((d) => d.text())

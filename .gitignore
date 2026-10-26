@@ -13,3 +13,6 @@ ios/DerivedData/
 
 # re-fetchable OSM extracts (npm run osm:fetch)
 data/osm/
+
+# Supabase CLI local state
+supabase/.temp/

@@ -2,13 +2,16 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { services } from '@/app/providers/services'
 import { type ApiError, type ApiErrorCode, toApiError } from '@/services/api/errors'
-import type { ClanMembership, ClanRanking } from '@/types/game'
+import type { ClanMembership, ClanPage, ClanRanking } from '@/types/game'
 import { type AvatarImageError, AvatarImageFailure, prepareAvatarImage } from '@/utils/avatarImage'
 import { useAuthStore } from './auth'
 
 export const useClanStore = defineStore('clan', () => {
   const membership = ref<ClanMembership | null>(null)
   const ranking = ref<ClanRanking[]>([])
+  /** clan screen data (clan_page); fetched only once the clan screen asked for it */
+  const page = ref<ClanPage | null>(null)
+  let pageWanted = false
   const loading = ref(false)
   const busy = ref(false)
   const error = ref<ApiError | null>(null)
@@ -17,16 +20,20 @@ export const useClanStore = defineStore('clan', () => {
   const avatarBusy = ref(false)
   const avatarError = ref<AvatarImageError | ApiErrorCode | null>(null)
 
-  async function load(): Promise<void> {
+  async function load(options: { page?: boolean } = {}): Promise<void> {
     const userId = useAuthStore().userId
     if (!userId) return
+    if (options.page) pageWanted = true
     loading.value = true
     loadError.value = null
     try {
       const api = services().api
       const [mine, top] = await Promise.all([api.getMyClan(userId), api.getClanLeaderboard()])
+      // only members have a clan screen; players without a clan never depend on clan_page()
+      const screen = pageWanted && mine ? await api.getClanPage() : null
       membership.value = mine
       ranking.value = top
+      page.value = screen
     } catch (e) {
       // keep whatever was shown before; a failed refresh is not "no clan"
       loadError.value = toApiError(e)
@@ -82,6 +89,8 @@ export const useClanStore = defineStore('clan', () => {
   function reset(): void {
     membership.value = null
     ranking.value = []
+    page.value = null
+    pageWanted = false
     error.value = null
     loadError.value = null
     avatarError.value = null
@@ -90,6 +99,7 @@ export const useClanStore = defineStore('clan', () => {
   return {
     membership,
     ranking,
+    page,
     loading,
     busy,
     error,

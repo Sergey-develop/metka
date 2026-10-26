@@ -3,7 +3,6 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { services } from '@/app/providers/services'
 import AppButton from '@/components/ui/AppButton.vue'
-import AppIcon from '@/components/ui/AppIcon.vue'
 import FigureLoader from '@/components/ui/FigureLoader.vue'
 import MemoryEditor from '@/features/album/MemoryEditor.vue'
 import { MATCH } from '@/services/scan/candidates'
@@ -37,7 +36,8 @@ const status = computed<{ text: string; warn?: boolean } | null>(() => {
   if (scan.outlinesState === 'loading') return { text: 'Ищем здания рядом…' }
   if (scan.outlinesState === 'error')
     return { text: scan.outlinesError?.code === 'offline' ? 'Нет сети' : 'Не удалось загрузить здания', warn: true }
-  if (scan.selection.id !== null) return { text: 'Поиск на паузе — закройте карточку, чтобы искать дальше' }
+  // the open card is self-explanatory (search is paused until it is closed), as in the mockup
+  if (scan.selection.id !== null) return null
   const m = scan.match
   if (m?.status === 'inaccurate')
     return { text: `Точность GPS ±${Math.round(scan.position?.accuracyM ?? 0)} м — выберите здание из списка`, warn: true }
@@ -120,13 +120,17 @@ onBeforeUnmount(() => {
   <main class="ar">
     <video ref="video" class="ar__video" playsinline muted autoplay aria-hidden="true" />
 
-    <header class="ar__top">
-      <button type="button" class="ar__round" aria-label="Закрыть" @click="close"><AppIcon name="close" :size="18" /></button>
-      <p v-if="status" class="ar__status" :class="{ 'ar__status--warn': status.warn }" role="status">{{ status.text }}</p>
+    <header v-if="status" class="ar__top">
+      <p class="ar__status" :class="{ 'ar__status--warn': status.warn }" role="status">{{ status.text }}</p>
     </header>
 
     <!-- aiming aid only: it marks the centre of view, it does not "recognise" anything -->
-    <div v-if="scan.phase === 'running'" class="ar__reticle" :class="{ 'ar__reticle--on': aimed }" aria-hidden="true" />
+    <div v-if="scan.phase === 'running'" class="ar__reticle" :class="{ 'ar__reticle--on': aimed }" aria-hidden="true">
+      <span /><span /><span /><span />
+    </div>
+
+    <!-- tapping the camera view closes the card and resumes the search -->
+    <button v-if="outline" type="button" class="ar__dismiss" aria-label="Закрыть карточку" @click="closeCard" />
 
     <section v-if="scan.phase === 'failed' && scan.failure" class="ar__failure card" role="alert">
       <p>{{ FAILURES[scan.failure] }}</p>
@@ -198,21 +202,8 @@ onBeforeUnmount(() => {
   right: 0;
   z-index: 2;
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  justify-content: center;
   padding: calc(var(--safe-top, 0px) + 12px) 16px 0;
-}
-.ar__round {
-  flex: none;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: rgb(0 0 0 / 45%);
-  color: #fff;
 }
 .ar__status {
   margin: 0;
@@ -226,37 +217,93 @@ onBeforeUnmount(() => {
     background: rgb(160 60 0 / 75%);
   }
 }
+// viewfinder from the mockup: 200pt square, four rounded corners, a thin cross in the centre
 .ar__reticle {
+  $size: 200px;
+  $arm: 34px;
   position: absolute;
   left: 50%;
-  top: 38%;
-  width: 64px;
-  height: 64px;
-  margin: -32px 0 0 -32px;
-  border: 2px solid rgb(255 255 255 / 70%);
-  border-radius: 14px;
-  transition: border-color 0.2s var(--ease), transform 0.2s var(--ease);
+  top: 45%;
+  width: $size;
+  height: $size;
+  margin: calc($size / -2) 0 0 calc($size / -2);
+  border-radius: 18px;
+  background: rgb(255 255 255 / 12%);
+  color: #fff;
+  transition: color 0.2s var(--ease), transform 0.2s var(--ease);
+  // the centre cross
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    background: currentColor;
+  }
+  &::before {
+    width: 20px;
+    height: 1.5px;
+    margin: -0.75px 0 0 -10px;
+  }
+  &::after {
+    width: 1.5px;
+    height: 20px;
+    margin: -10px 0 0 -0.75px;
+  }
+  span {
+    position: absolute;
+    width: $arm;
+    height: $arm;
+    border: 4px solid currentColor;
+    &:nth-child(1) {
+      top: 0;
+      left: 0;
+      border-width: 4px 0 0 4px;
+      border-top-left-radius: 18px;
+    }
+    &:nth-child(2) {
+      top: 0;
+      right: 0;
+      border-width: 4px 4px 0 0;
+      border-top-right-radius: 18px;
+    }
+    &:nth-child(3) {
+      bottom: 0;
+      left: 0;
+      border-width: 0 0 4px 4px;
+      border-bottom-left-radius: 18px;
+    }
+    &:nth-child(4) {
+      bottom: 0;
+      right: 0;
+      border-width: 0 4px 4px 0;
+      border-bottom-right-radius: 18px;
+    }
+  }
   &--on {
-    border-color: var(--c-accent);
-    transform: scale(1.15);
+    color: var(--c-accent);
+    transform: scale(1.04);
   }
 }
-.ar__bottom {
+.ar__dismiss {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.ar__bottom {
+  // above the tab bar (it sits at max(safe-bottom - 13px, 12px), see BottomNav)
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: calc(var(--nav-height) + max(var(--safe-bottom, 0px) - 13px, 12px) + 4px);
   z-index: 2;
   display: flex;
   flex-direction: column;
   gap: 8px;
   color: var(--c-text);
-  > :not(.info) {
-    margin: 0 16px;
-  }
-  > :last-child:not(.info) {
-    margin-bottom: calc(var(--safe-bottom, 0px) + 16px);
-  }
 }
 .ar__loader {
   display: grid;
@@ -301,7 +348,7 @@ onBeforeUnmount(() => {
   position: absolute;
   left: 16px;
   right: 16px;
-  bottom: calc(var(--safe-bottom, 0px) + 24px);
+  bottom: calc(var(--nav-height) + max(var(--safe-bottom, 0px) - 13px, 12px) + 4px);
   z-index: 3;
   padding: 18px;
   display: flex;

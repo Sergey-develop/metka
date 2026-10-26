@@ -1,7 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { services } from '@/app/providers/services'
+import MemoryEditor from '@/features/album/MemoryEditor.vue'
 import { ApiError } from '@/services/api/errors'
 import { GameApi } from '@/services/api/gameApi'
 import { SupabaseMemoriesService } from '@/services/memories/memoriesService'
@@ -23,6 +25,7 @@ function memoryRow(photo: string | null) {
     impression: 'wow',
     is_favorite: true,
     photo_path: photo,
+    created_at: '2026-10-18T10:00:00Z',
     updated_at: '2026-10-18T10:00:00Z',
   }
 }
@@ -56,6 +59,7 @@ const current = (photoPath: string | null): Memory => ({
   impression: null,
   isFavorite: false,
   photoPath,
+  createdAt: '',
   updatedAt: '',
 })
 
@@ -125,5 +129,33 @@ describe('GameApi.getProgress', () => {
     const data = { exploredCells: 120, exploredDistricts: 1, districtMinCells: 50, unlockedBuildings: 3, memories: 2, favoritePlaces: 1 }
     const api = new GameApi({ rpc: vi.fn(async () => ({ data, error: null })) } as unknown as SupabaseClient)
     await expect(api.getProgress()).resolves.toEqual(data)
+  })
+})
+
+describe('MemoryEditor', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    installFakeServices()
+  })
+
+  it('slides out before it tells the parent to close', async () => {
+    vi.useFakeTimers()
+    try {
+      const w = mount(MemoryEditor, {
+        props: { buildingId: 'b1', place: { buildingName: 'ГУМ', address: null, rarity: 'rare' } },
+        // the editor is teleported to the body; rendered in place to query it through the wrapper
+        global: { stubs: { teleport: true } },
+      })
+      expect(w.find('.backdrop--leaving').exists()).toBe(false)
+      await w.find('.editor__close').trigger('click')
+      expect(w.find('.backdrop--leaving').exists()).toBe(true)
+      expect(w.emitted('close')).toBeUndefined() // still sliding down
+      await w.find('.backdrop').trigger('click') // a second request while leaving is ignored
+      vi.advanceTimersByTime(300)
+      expect(w.emitted('close')).toHaveLength(1)
+      w.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

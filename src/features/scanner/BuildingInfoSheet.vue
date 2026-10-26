@@ -62,6 +62,16 @@ const action = computed(() => {
   return g.discoveredAt ? { kind: 'discovered' as const } : { kind: 'scan' as const, id: g.id }
 })
 
+/** one line for the "interesting fact" strip of the compact card, built only from real OSM data */
+const factLine = computed(() => {
+  const f = facts.value
+  if (!f) return null
+  if (f.built) return `здание построено в ${f.built}${/^\d{4}$/.test(f.built) ? ' году' : ''}.`
+  if (f.series) return `дом типовой серии ${f.series}.`
+  if (f.levels !== null && f.levels >= 10) return `в здании ${f.levels} этажей.`
+  return null
+})
+
 function distanceText(m: number): string {
   return m < 1000 ? `${Math.round(m / 5) * 5} м` : `${(m / 1000).toFixed(1)} км`
 }
@@ -75,25 +85,28 @@ function orgCountText(n: number): string {
 
 <template>
   <article class="info card" :class="{ 'info--expanded': expanded }" aria-live="polite" :aria-label="title">
-    <button
-      type="button"
-      class="info__grip"
-      :aria-label="expanded ? 'Свернуть' : 'Подробнее'"
-      :aria-expanded="expanded"
-      @click="emit('update:expanded', !expanded)"
-    />
-    <button type="button" class="info__close" aria-label="Закрыть" @click="emit('close')">
+    <button v-if="expanded" type="button" class="info__close" aria-label="Закрыть" @click="emit('close')">
       <AppIcon name="close" :size="16" />
     </button>
     <header class="info__head">
       <p class="info__kind">
-        <span v-if="facts?.kind">{{ facts.kind }}</span>
-        <span v-else-if="game">Игровое здание</span>
-        <span v-else>Здание</span>
-        <span v-if="distanceM !== null" class="info__distance">· ≈{{ distanceText(distanceM) }}</span>
+        <span class="info__tag">{{ facts?.kind ?? (game ? 'Игровое здание' : 'Здание') }}</span>
+        <span v-if="distanceM !== null" class="info__distance">≈{{ distanceText(distanceM) }}</span>
       </p>
-      <h2 class="info__title">{{ title }}</h2>
-      <p v-if="address" class="info__address">{{ address }}</p>
+      <div class="info__row">
+        <h2 class="info__title">{{ title }}</h2>
+        <button
+          type="button"
+          class="info__more"
+          :class="{ 'info__more--open': expanded }"
+          :aria-label="expanded ? 'Свернуть' : 'Подробнее'"
+          :aria-expanded="expanded"
+          @click="emit('update:expanded', !expanded)"
+        >
+          <AppIcon name="chevron" :size="22" />
+        </button>
+      </div>
+      <p v-if="address && (expanded || !description)" class="info__address">{{ address }}</p>
     </header>
 
     <div v-if="info?.state === 'loading'" class="info__loading" role="status">
@@ -107,6 +120,13 @@ function orgCountText(n: number): string {
     <p v-if="description" class="info__desc" :class="{ 'info__desc--short': !expanded }">{{ description }}</p>
     <p v-if="!expanded && organizations && organizations.length" class="info__meta">
       {{ orgCountText(organizations.length) }} внутри
+    </p>
+    <p v-if="!expanded && factLine" class="info__fact">
+      <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+        <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M15 2v2.5M5.5 6l1.8 1.8M24.5 6l-1.8 1.8M2.5 15H5M25 15h2.5" /></g>
+        <path fill="currentColor" d="M15 8a7 7 0 0 0-4.2 12.6c.7.5 1.2 1.3 1.2 2.2V23h6v-.2c0-.9.5-1.7 1.2-2.2A7 7 0 0 0 15 8Zm-3 16.5h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-1Z" />
+      </svg>
+      <span>Интересный факт: {{ factLine }}</span>
     </p>
 
     <template v-if="expanded">
@@ -148,10 +168,9 @@ function orgCountText(n: number): string {
       </p>
     </template>
 
-    <div class="info__actions">
-      <AppButton v-if="!expanded" variant="secondary" @click="emit('update:expanded', true)">Подробнее</AppButton>
+    <div v-if="action?.kind === 'scan' || (expanded && action?.kind === 'discovered')" class="info__actions">
       <AppButton v-if="action?.kind === 'scan'" @click="emit('scan', action.id)">Открыть здание</AppButton>
-      <AppButton v-else-if="action?.kind === 'discovered'" variant="secondary" @click="emit('memory')">Воспоминание</AppButton>
+      <AppButton v-else variant="secondary" @click="emit('memory')">Воспоминание</AppButton>
     </div>
     <p v-if="action?.kind === 'unavailable'" class="info__muted">Временно недоступно для сканирования</p>
     <p v-else-if="action?.kind === 'discovered'" class="info__done">Здание открыто</p>
@@ -164,29 +183,30 @@ function orgCountText(n: number): string {
 </template>
 
 <style scoped lang="scss">
+// measured on the 390pt mockup (AR.png, 3x)
 .info {
-  padding: 8px 18px calc(16px + var(--safe-bottom, 0px));
-  border-radius: 24px 24px 0 0;
+  position: relative;
+  padding: 12px 12px 14px;
+  border-radius: 12px;
+  background: #fff;
+  color: #000;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 38vh;
+  max-height: 46vh;
   overflow-y: auto;
   transition: max-height 0.25s var(--ease);
   > * {
     flex-shrink: 0;
   }
   &--expanded {
-    max-height: 80vh;
+    max-height: 62vh;
   }
-}
-.info {
-  position: relative;
 }
 .info__close {
   position: absolute;
-  top: 12px;
-  right: 14px;
+  top: 10px;
+  right: 10px;
   width: 32px;
   height: 32px;
   padding: 0;
@@ -194,52 +214,61 @@ function orgCountText(n: number): string {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--c-bg);
-  color: var(--c-text-2);
+  background: #f3f3f9;
+  color: #85858c;
 }
-.info__head {
+.info__kind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  line-height: 18px;
+}
+.info__tag {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #ff9248;
+  color: #000;
+}
+.info__distance {
+  font-size: 13px;
+  color: #85858c;
+}
+.info--expanded .info__head {
   padding-right: 40px;
 }
-.info__grip {
-  align-self: center;
-  width: 44px;
-  height: 18px;
+.info__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.info__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 28px;
+}
+.info__more {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
   padding: 0;
   border: 0;
   background: none;
-  position: relative;
-  &::after {
-    content: '';
-    position: absolute;
-    left: 6px;
-    right: 6px;
-    top: 7px;
-    height: 4px;
-    border-radius: 2px;
-    background: var(--c-surface-2);
+  color: #000;
+  transition: transform 0.2s var(--ease);
+  &--open {
+    transform: rotate(90deg);
   }
 }
-.info__kind {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--c-text-2);
-}
-.info__distance {
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 500;
-}
-.info__title {
-  font-size: 20px;
-  font-weight: 700;
-  margin-top: 2px;
-}
 .info__address {
-  color: var(--c-text-2);
+  color: #85858c;
   font-size: 14px;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 .info__loading {
   display: flex;
@@ -264,14 +293,30 @@ function orgCountText(n: number): string {
   text-decoration: underline;
 }
 .info__desc {
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 16px;
+  line-height: 19px;
+  color: #6d6d72;
   &--short {
     display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+}
+.info__fact {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 12px 12px 10px;
+  border-radius: 6px;
+  background: #e3eefd;
+  font-size: 15px;
+  line-height: 19px;
+  color: #85858c;
+  svg {
+    flex: none;
+    color: #0189ff;
   }
 }
 .info__meta,

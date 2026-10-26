@@ -32,7 +32,7 @@ function startCooldown(): void {
 }
 
 onMounted(() => {
-  if (!EMAIL_RE.test(email.value)) void router.replace({ name: 'register' })
+  if (!EMAIL_RE.test(email.value)) void router.replace({ name: 'register-email' })
   else startCooldown()
 })
 onBeforeUnmount(() => clearInterval(timer))
@@ -93,8 +93,8 @@ async function resend(): Promise<void> {
     </AppButton>
     <p class="form__hint">Письма нет? Проверьте «Спам» и правильность адреса.</p>
     <div class="form__links">
-      <RouterLink to="/auth/register">Другая почта</RouterLink>
-      <RouterLink to="/auth/login">Ко входу</RouterLink>
+      <RouterLink :to="{ name: 'register-email' }">Другая почта</RouterLink>
+      <RouterLink :to="{ name: 'login-email' }">Ко входу</RouterLink>
     </div>
   </form>
 </template>

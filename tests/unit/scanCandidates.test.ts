@@ -75,13 +75,54 @@ describe('rankCandidates', () => {
     expect(r.candidates).toEqual([])
   })
 
-  it('ignores the footprint the GPS fix falls into and looks out of it', () => {
+  it('a fix inside a footprint looks out of it but picks nothing: that building is offered first', () => {
     const around = rect(1, -10, -10, 10, 10)
     const ahead = rect(2, -15, 40, 15, 60)
     const r = rankCandidates(at(), { deg: 0, accuracyDeg: 10 }, [around, ahead])
     expect(r.insideId).toBe(1)
     expect(r.best?.outline.id).toBe(2)
+    expect(r.status).toBe('ambiguous')
+    expect(r.candidates.map((c) => c.outline.id)).toEqual([1, 2])
     expect(r.nearby[0]).toMatchObject({ distanceM: 0 })
+  })
+
+  it('standing by house 71 with the fix inside it never auto-picks 69к2 behind it', () => {
+    // the player is just south of 71's wall; GPS puts them 3 m inside; 69к2 is behind 71
+    const h71 = rect(71, -20, -3, 20, 15)
+    const h69k2 = rect(692, -20, 30, 20, 50)
+    const r = rankCandidates(at(8), { deg: 0, accuracyDeg: 10 }, [h71, h69k2])
+    expect(r.status).toBe('ambiguous')
+    expect(r.candidates[0]?.outline.id).toBe(71)
+    expect(new SelectionStabilizer().update(r, 0).id).toBeNull()
+  })
+
+  it('a fix inside a footprint with nothing else in view still offers that building', () => {
+    const r = rankCandidates(at(), { deg: 180, accuracyDeg: 10 }, [rect(1, -10, -10, 10, 10)])
+    expect(r.status).toBe('ambiguous')
+    expect(r.candidates.map((c) => c.outline.id)).toEqual([1])
+  })
+
+  it('a winner that GPS drift of a few metres would change is not picked automatically', () => {
+    // a 12 m house 15 m ahead, a wide one right behind it: 10 m aside, the view hits the wide one
+    const narrow = rect(1, -6, 15, 6, 23)
+    const behind = rect(2, -40, 27, 40, 45)
+    const precise = rankCandidates(at(5), { deg: 0, accuracyDeg: 5 }, [narrow, behind])
+    const drifting = rankCandidates(at(15), { deg: 0, accuracyDeg: 5 }, [narrow, behind])
+    expect(precise.status).toBe('likely')
+    expect(precise.gpsAgreement).toBe(1)
+    // a clear winner by the cone alone (score and margin pass)...
+    expect(drifting.best?.outline.id).toBe(1)
+    expect(drifting.best!.score).toBeGreaterThanOrEqual(MATCH.minScore)
+    expect(drifting.margin).toBeGreaterThanOrEqual(MATCH.minMargin)
+    // ...but not from most points within the GPS error
+    expect(drifting.gpsAgreement).toBeLessThan(MATCH.minGpsAgreement)
+    expect(drifting.status).toBe('ambiguous')
+  })
+
+  it('a wide building straight ahead stays likely within the GPS error', () => {
+    const r = rankCandidates(at(15), { deg: 0, accuracyDeg: 10 }, [rect(1, -60, 40, 60, 60)])
+    expect(r.status).toBe('likely')
+    expect(r.gpsAgreement).toBe(1)
   })
 
   it('handles headings across north (359° vs 1°) and single-node buildings', () => {
@@ -109,6 +150,7 @@ describe('SelectionStabilizer', () => {
     coneDeg: 10,
     nearby: [],
     insideId: null,
+    gpsAgreement: 1,
   })
   const unclear: MatchResult = { ...likely(A), status: 'ambiguous' }
   const opts = { holdMs: 800, releaseMs: 2000 }

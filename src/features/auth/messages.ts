@@ -6,6 +6,8 @@ const TEXT: Record<AuthErrorCode, string> = {
   invalid_code: 'Код неверный или устарел. Запросите новый.',
   user_exists: 'Аккаунт с этой почтой уже существует.',
   weak_password: 'Пароль слишком простой. Используйте не меньше 8 символов.',
+  invalid_phone: 'Проверьте номер телефона.',
+  phone_unavailable: 'Вход по телефону пока недоступен. Войдите по почте.',
   rate_limited: 'Слишком много попыток. Повторите позже.',
   network: 'Нет связи с сервером. Проверьте интернет.',
   session_expired: 'Сессия истекла. Войдите снова.',
@@ -22,3 +24,5 @@ export const MIN_PASSWORD = 8
 /** Supabase one-time codes are 6 digits by default (configurable up to 10) */
 export const OTP_RE = /^\d{6,10}$/
 export const RESEND_COOLDOWN_S = 60
+/** Supabase SMS codes are 6 digits by default; keep in sync with Auth → Phone → OTP length */
+export const SMS_CODE_LENGTH = 6

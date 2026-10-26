@@ -2,10 +2,14 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ExplorationResult } from '../exploration/explorationTracker'
 import type { Cell } from '../exploration/grid'
 import type { TrackPoint } from '../exploration/trackFilter'
+import type { GameAreaId } from '@/utils/gameAreas'
 import { factsFromOsm, organizationFromOsm } from '../buildings/buildingFacts'
 import type { CandidateMatcher, RecognitionCandidate } from '../recognition/types'
 import {
   AVATAR_KEYS,
+  EVENT_KINDS,
+  STYLE_COLLECTIONS,
+  TASK_KINDS,
   type AdminGameInfo,
   type AvatarKey,
   type Bbox,
@@ -17,21 +21,30 @@ import {
   type OutlineGameInfo,
   type OutlinesPage,
   type PlayerProgress,
+  type PlayerStats,
   type ClaimResult,
   type Clan,
   type ClanMembership,
+  type ClanPage,
   type ClanRanking,
+  type EventDraft,
+  type EventPerson,
+  type GameEvent,
+  type LandmarkCollection,
   type CollectionItem,
   type DistrictOverview,
   type MapBuilding,
   type PlayerRanking,
   type Profile,
   type ProfileStats,
+  type PublicProfile,
   type QuestView,
   type Rarity,
   type ScanDecision,
   type ScanRejectReason,
   type ScanSubmission,
+  type StyleCollections,
+  type TasksState,
 } from '@/types/game'
 import { ApiError, toApiError, withRetry } from './errors'
 import { arr, bool, num, numOrNull, obj, oneOf, str, strOrNull, type Json } from './parse'
@@ -215,6 +228,22 @@ function parseCounts(value: unknown): Record<string, number> {
   return Object.fromEntries(Object.keys(o).map((k) => [k, num(o, k)]))
 }
 
+function parsePlayerStats(value: unknown): PlayerStats {
+  const o = obj(value, 'stats')
+  const streets = obj(o.streets, 'stats.streets')
+  const clan = o.clan === null || o.clan === undefined ? null : obj(o.clan, 'stats.clan')
+  return {
+    today: str(o, 'today'),
+    streakDays: num(o, 'streakDays'),
+    activeDays: arr(o.activeDays, 'stats.activeDays').map((d) => {
+      if (typeof d !== 'string') throw new ApiError('invalid_response', 'stats.activeDays: expected strings')
+      return d
+    }),
+    streets: { visited: num(streets, 'visited'), total: num(streets, 'total'), scope: oneOf(streets, 'scope', ['home', 'all'] as const) },
+    clan: clan ? { level: num(clan, 'level'), discoveries: num(clan, 'discoveries') } : null,
+  }
+}
+
 export interface ExploredCellsPage {
   cells: Cell[]
   truncated: boolean
@@ -244,6 +273,7 @@ const CLAN_AVATAR_BUCKET = 'clan-avatars'
 const PROFILE_AVATAR_BUCKET = 'profile-avatars'
 /** private player photos (album + discovery photos), owner-only — migrations 010/011 */
 const PLAYER_PHOTO_BUCKET = 'memory-photos'
+const EVENT_COVER_BUCKET = 'event-covers'
 
 /** Typed access to the METKA backend (PostgREST tables + RPC functions). */
 export class GameApi implements CandidateMatcher {
@@ -390,6 +420,54 @@ export class GameApi implements CandidateMatcher {
     }
   }
 
+  async getPlayerStats(): Promise<PlayerStats> {
+    return parsePlayerStats(await withRetry(() => unwrap(this.client.rpc('player_stats'))))
+  }
+
+  /** player_public_profile() (migration 019): a clanmate's profile; 'profile_hidden' otherwise. */
+  async getPublicProfile(userId: string): Promise<PublicProfile> {
+    const o = obj(await withRetry(() => unwrap(this.client.rpc('player_public_profile', { p_user_id: userId }))), 'public_profile')
+    const p = obj(o.profile, 'public_profile.profile')
+    const progress = obj(o.progress, 'public_profile.progress')
+    return {
+      profile: {
+        id: str(p, 'id'),
+        username: str(p, 'username'),
+        avatarUrl: this.profileAvatarUrl(strOrNull(p, 'avatarPath')),
+        avatarKey: p.avatarKey === null || p.avatarKey === undefined ? null : oneOf(p, 'avatarKey', AVATAR_KEYS),
+        level: num(p, 'level'),
+        xp: num(p, 'xp'),
+        buildingsDiscovered: num(p, 'buildingsDiscovered'),
+        homeDistrictId: strOrNull(p, 'homeDistrictId'),
+      },
+      stats: parsePlayerStats(o.stats),
+      progress: {
+        exploredCells: num(progress, 'exploredCells'),
+        exploredDistricts: num(progress, 'exploredDistricts'),
+        districtMinCells: num(progress, 'districtMinCells'),
+        unlockedBuildings: num(progress, 'unlockedBuildings'),
+      },
+      discoveredByDistrict: parseCounts(o.discoveredByDistrict),
+      achievements: arr(o.achievements, 'public_profile.achievements').map((row) => {
+        const q = obj(row, 'public_profile.achievement')
+        return {
+          id: str(q, 'id'),
+          slug: str(q, 'slug'),
+          title: str(q, 'title'),
+          description: str(q, 'description'),
+          kind: oneOf(q, 'kind', ['discover_count', 'discover_in_district', 'discover_rarity'] as const),
+          target: num(q, 'target'),
+          progress: num(q, 'progress'),
+          completedAt: strOrNull(q, 'completedAt'),
+        }
+      }),
+      bestFinds: arr(o.bestFinds, 'public_profile.bestFinds').map((row) => {
+        const f = obj(row, 'public_profile.find')
+        return { buildingId: str(f, 'buildingId'), name: str(f, 'name'), rarity: oneOf(f, 'rarity', RARITIES), imageUrl: strOrNull(f, 'imageUrl') }
+      }),
+    }
+  }
+
   async isAdmin(): Promise<boolean> {
     return (await unwrap(this.client.rpc('is_admin'))) === true
   }
@@ -423,6 +501,12 @@ export class GameApi implements CandidateMatcher {
       })
       return unwrap(signal ? request.abortSignal(signal) : request)
     })
+  }
+
+  /** area_progress() (migration 025): game buildings of a game area and how many the player found */
+  async getAreaProgress(area: GameAreaId): Promise<{ total: number; discovered: number }> {
+    const o = obj(await withRetry(() => unwrap(this.client.rpc('area_progress', { p_area: area }))), 'area_progress')
+    return { total: num(o, 'total'), discovered: num(o, 'discovered') }
   }
 
   async getDistrictsOverview(): Promise<DistrictOverview[]> {
@@ -655,7 +739,7 @@ export class GameApi implements CandidateMatcher {
       unwrap(
         this.client
           .from('clan_members')
-          .select('user_id, role, joined_at, profiles(username, level)')
+          .select('user_id, role, joined_at, profiles(username, level, avatar_path, avatar_key)')
           .eq('clan_id', clan.id)
           .order('joined_at'),
       ),
@@ -671,9 +755,219 @@ export class GameApi implements CandidateMatcher {
           role: oneOf(m, 'role', ['owner', 'member'] as const),
           username: str(p, 'username'),
           level: num(p, 'level'),
+          avatarUrl: this.profileAvatarUrl(strOrNull(p, 'avatar_path')),
+          avatarKey: p.avatar_key === null || p.avatar_key === undefined ? null : oneOf(p, 'avatar_key', AVATAR_KEYS),
         }
       }),
     }
+  }
+
+  /** clan_page() (migration 017): the screen of the player's own clan; null — not in a clan. */
+  async getClanPage(): Promise<ClanPage | null> {
+    const data = await withRetry(() => unwrap(this.client.rpc('clan_page')))
+    if (data === null) return null
+    const o = obj(data, 'clan_page')
+    const c = obj(o.clan, 'clan_page.clan')
+    const week = obj(o.week, 'clan_page.week')
+    const goal = obj(week.goal, 'clan_page.week.goal')
+    const metrics = obj(o.metrics, 'clan_page.metrics')
+    return {
+      clan: {
+        id: str(c, 'id'),
+        name: str(c, 'name'),
+        tag: str(c, 'tag'),
+        ownerId: str(c, 'ownerId'),
+        avatarUrl: this.clanAvatarUrl(strOrNull(c, 'avatarPath')),
+        members: num(c, 'members'),
+        maxMembers: num(c, 'maxMembers'),
+      },
+      week: {
+        daysLeft: num(week, 'daysLeft'),
+        goal: {
+          target: num(goal, 'target'),
+          progress: num(goal, 'progress'),
+          districtId: strOrNull(goal, 'districtId'),
+          districtName: strOrNull(goal, 'districtName'),
+        },
+      },
+      members: arr(o.members, 'clan_page.members').map((row) => {
+        const m = obj(row, 'clan_page.member')
+        return {
+          userId: str(m, 'userId'),
+          username: str(m, 'username'),
+          level: num(m, 'level'),
+          role: oneOf(m, 'role', ['owner', 'member'] as const),
+          avatarUrl: this.profileAvatarUrl(strOrNull(m, 'avatarPath')),
+          avatarKey: m.avatarKey === null || m.avatarKey === undefined ? null : oneOf(m, 'avatarKey', AVATAR_KEYS),
+          weekCells: num(m, 'weekCells'),
+        }
+      }),
+      ownedDistrictIds: arr(o.ownedDistricts, 'clan_page.ownedDistricts').map((id) => {
+        if (typeof id !== 'string') throw new ApiError('invalid_response', 'clan_page.ownedDistricts: expected strings')
+        return id
+      }),
+      metrics: { level: num(metrics, 'level'), exploredCells: num(metrics, 'exploredCells'), discoveries: num(metrics, 'discoveries') },
+      chronicle: arr(o.chronicle, 'clan_page.chronicle').map((row) => {
+        const e = obj(row, 'clan_page.chronicle')
+        const base = { at: str(e, 'at'), username: str(e, 'username') }
+        return oneOf(e, 'kind', ['discovery', 'joined'] as const) === 'discovery'
+          ? { kind: 'discovery' as const, ...base, buildingName: str(e, 'buildingName'), rarity: oneOf(e, 'rarity', RARITIES) }
+          : { kind: 'joined' as const, ...base }
+      }),
+    }
+  }
+
+  private parsePerson(row: unknown, label: string): EventPerson {
+    const o = obj(row, label)
+    return {
+      userId: str(o, 'userId'),
+      username: str(o, 'username'),
+      avatarUrl: this.profileAvatarUrl(strOrNull(o, 'avatarPath')),
+      avatarKey: o.avatarKey === null || o.avatarKey === undefined ? null : oneOf(o, 'avatarKey', AVATAR_KEYS),
+    }
+  }
+
+  private parseEvent(row: unknown): GameEvent {
+    const o = obj(row, 'event')
+    const cover = strOrNull(o, 'coverPath')
+    return {
+      id: str(o, 'id'),
+      kind: oneOf(o, 'kind', EVENT_KINDS),
+      title: str(o, 'title'),
+      description: strOrNull(o, 'description'),
+      lat: num(o, 'lat'),
+      lng: num(o, 'lng'),
+      placeName: strOrNull(o, 'placeName'),
+      startsAt: str(o, 'startsAt'),
+      maxParticipants: num(o, 'maxParticipants'),
+      coverUrl: cover ? this.client.storage.from(EVENT_COVER_BUCKET).getPublicUrl(cover).data.publicUrl : null,
+      participants: num(o, 'participants'),
+      joined: bool(o, 'joined'),
+      organizer: this.parsePerson(o.organizer, 'event.organizer'),
+      faces: arr(o.faces, 'event.faces').map((f) => this.parsePerson(f, 'event.face')),
+    }
+  }
+
+  /** events_feed() (migration 018): upcoming and running events, soonest first. */
+  async getEvents(): Promise<GameEvent[]> {
+    return arr(await withRetry(() => unwrap(this.client.rpc('events_feed'))), 'events').map((e) => this.parseEvent(e))
+  }
+
+  async getEvent(id: string): Promise<GameEvent> {
+    return this.parseEvent(await withRetry(() => unwrap(this.client.rpc('event_page', { p_event_id: id }))))
+  }
+
+  /**
+   * Uploads the cover (if any) to the creator's folder, then creates the event; the server validates
+   * everything again (create_event). Returns the new event id.
+   */
+  async createEvent(userId: string, draft: EventDraft): Promise<string> {
+    const bucket = this.client.storage.from(EVENT_COVER_BUCKET)
+    let coverPath: string | null = null
+    if (draft.cover) {
+      coverPath = `${userId}/${crypto.randomUUID()}.${draft.cover.type === 'image/webp' ? 'webp' : 'jpg'}`
+      const { error } = await bucket.upload(coverPath, draft.cover, { contentType: draft.cover.type, upsert: false, cacheControl: '31536000' })
+      if (error) throw toApiError(error)
+    }
+    try {
+      const id = await unwrap(
+        this.client.rpc('create_event', {
+          p_kind: draft.kind,
+          p_title: draft.title,
+          p_description: draft.description,
+          p_lat: draft.lat,
+          p_lng: draft.lng,
+          p_starts_at: draft.startsAt.toISOString(),
+          p_max_participants: draft.maxParticipants,
+          p_cover_path: coverPath,
+        }),
+      )
+      if (typeof id !== 'string') throw new ApiError('invalid_response', 'create_event: expected uuid')
+      return id
+    } catch (e) {
+      if (coverPath) await bucket.remove([coverPath]) // no orphan
+      throw e
+    }
+  }
+
+  /** my_tasks() (migration 020): tasks of the day and week with live progress, and the seasonal task. */
+  async getTasks(): Promise<TasksState> {
+    const o = obj(await withRetry(() => unwrap(this.client.rpc('my_tasks'))), 'tasks')
+    const s = o.season === null || o.season === undefined ? null : obj(o.season, 'tasks.season')
+    return {
+      dayEndsAt: str(obj(o.day, 'tasks.day'), 'endsAt'),
+      weekEndsAt: str(obj(o.week, 'tasks.week'), 'endsAt'),
+      tasks: arr(o.tasks, 'tasks.tasks').map((row) => {
+        const t = obj(row, 'task')
+        return {
+          slug: str(t, 'slug'),
+          period: oneOf(t, 'period', ['day', 'week'] as const),
+          kind: oneOf(t, 'kind', TASK_KINDS),
+          title: str(t, 'title'),
+          target: num(t, 'target'),
+          progress: num(t, 'progress'),
+          rewardCoins: num(t, 'rewardCoins'),
+          claimed: bool(t, 'claimed'),
+        }
+      }),
+      season: s
+        ? {
+            id: str(s, 'id'),
+            title: str(s, 'title'),
+            description: str(s, 'description'),
+            target: num(s, 'target'),
+            progress: num(s, 'progress'),
+            rewardCoins: num(s, 'rewardCoins'),
+            endsAt: str(s, 'endsAt'),
+            completed: bool(s, 'completed'),
+            claimed: bool(s, 'claimed'),
+          }
+        : null,
+    }
+  }
+
+  /** style_collections() (migration 021): style collections from OSM tags and found buildings per rarity. */
+  async getStyleCollections(): Promise<StyleCollections> {
+    const o = obj(await withRetry(() => unwrap(this.client.rpc('style_collections'))), 'style_collections')
+    return {
+      collections: arr(o.collections, 'style_collections.collections').map((row) => {
+        const c = obj(row, 'style_collection')
+        return { id: oneOf(c, 'id', STYLE_COLLECTIONS), collected: num(c, 'collected'), total: num(c, 'total') }
+      }),
+      rarity: arr(o.rarity, 'style_collections.rarity').map((row) => {
+        const r = obj(row, 'rarity_count')
+        return { rarity: oneOf(r, 'rarity', ['rare', 'epic', 'legendary'] as const), found: num(r, 'found'), total: num(r, 'total') }
+      }),
+    }
+  }
+
+  async getLandmarkCollections(): Promise<LandmarkCollection[]> {
+    const rows = arr(await withRetry(() => unwrap(this.client.rpc('landmark_collections'))), 'landmark_collections')
+    return rows.map((row) => {
+      const c = obj(row, 'landmark_collection')
+      return {
+        id: str(c, 'id'),
+        title: str(c, 'title'),
+        items: arr(c.items, 'landmark_collection.items').map((item) => {
+          const l = obj(item, 'landmark')
+          return { id: str(l, 'id'), name: str(l, 'name'), marked: bool(l, 'marked') }
+        }),
+      }
+    })
+  }
+
+  /** claim_task(): idempotent on the server (one claim per task and period). Returns the new coin balance. */
+  async claimTask(slug: string): Promise<number> {
+    const o = obj(await withRetry(() => unwrap(this.client.rpc('claim_task', { p_slug: slug }))), 'claim_task')
+    return num(o, 'coins')
+  }
+
+  async joinEvent(id: string): Promise<void> {
+    await unwrap(this.client.rpc('join_event', { p_event_id: id }))
+  }
+
+  async leaveEvent(id: string): Promise<void> {
+    await unwrap(this.client.rpc('leave_event', { p_event_id: id }))
   }
 
   async createClan(name: string, tag: string): Promise<string> {

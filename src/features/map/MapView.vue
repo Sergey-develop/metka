@@ -3,27 +3,34 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { services } from '@/app/providers/services'
 import AppIcon from '@/components/ui/AppIcon.vue'
-import FigureAvatar from '@/components/ui/FigureAvatar.vue'
 import FigureLoader from '@/components/ui/FigureLoader.vue'
-import FilledIcon from '@/components/ui/FilledIcon.vue'
+import LevelProgress from '@/components/ui/LevelProgress.vue'
+import CategoryChips from '@/components/ui/CategoryChips.vue'
 import PermissionSheet from '@/components/ui/PermissionSheet.vue'
+import PlayerAvatar from '@/components/ui/PlayerAvatar.vue'
+import WalletStreak from '@/components/ui/WalletStreak.vue'
+import ClanAvatar from '@/features/clans/ClanAvatar.vue'
+import { useClanStore } from '@/stores/clan'
 import { useExplorationStore } from '@/stores/exploration'
 import { useMemoriesStore } from '@/stores/memories'
 import { useMapStore } from '@/stores/map'
 import { useOutlinesStore } from '@/stores/outlines'
 import { useProfileStore } from '@/stores/profile'
-import { useQuestsStore } from '@/stores/quests'
+import { useTasksStore } from '@/stores/tasks'
 import type { ExplorationStatus } from '@/services/exploration/explorationTracker'
 import { DEFAULT_FILTER } from '@/services/exploration/trackFilter'
 import { toApiError } from '@/services/api/errors'
 import { STREET_LEVEL_ZOOM, type MapViewport } from '@/services/map/types'
 import type { MapBuilding } from '@/types/game'
 import BuildingCard from './BuildingCard.vue'
+import ClanSheet from './ClanSheet.vue'
 import DistrictCard from './DistrictCard.vue'
 import ExplorationDiagnostics from './ExplorationDiagnostics.vue'
 import MapCanvas from './MapCanvas.vue'
 import OutlineCard from './OutlineCard.vue'
+import TasksSheet from './TasksSheet.vue'
 import MemoryEditor from '@/features/album/MemoryEditor.vue'
+import { GAME_AREAS, gameAreaAt, type GameAreaId } from '@/utils/gameAreas'
 
 const map = useMapStore()
 const outlines = useOutlinesStore()
@@ -32,37 +39,19 @@ const memories = useMemoriesStore()
 /** unlocked building whose memory is being edited */
 const memoryFor = ref<MapBuilding | null>(null)
 const profile = useProfileStore()
-const quests = useQuestsStore()
+const clan = useClanStore()
+const tasks = useTasksStore()
+/** the clan / tasks sheets over the map (mockups «выдвигается клан», «выдвигаются задания») */
+const sheet = ref<'clan' | 'tasks' | null>(null)
 const router = useRouter()
 const canvas = ref<InstanceType<typeof MapCanvas> | null>(null)
 const header = ref<HTMLElement | null>(null)
 const headerHeight = ref(180)
 const mapError = ref<string | null>(null)
-const query = ref('')
-const searchFocused = ref(false)
 
-const greeting = computed(() => {
-  const h = new Date().getHours()
-  if (h < 5) return 'Доброй ночи!'
-  if (h < 12) return 'Доброе утро!'
-  if (h < 18) return 'Добрый день!'
-  return 'Добрый вечер!'
-})
-const initials = computed(() => (profile.profile?.username ?? '?').slice(0, 2).toUpperCase())
-const hasReward = computed(() => quests.quests.some((q) => q.completedAt && !q.claimedAt))
-
-type SearchHit = { kind: 'district' | 'building'; id: string; title: string; subtitle: string }
-const hits = computed<SearchHit[]>(() => {
-  const q = query.value.trim().toLocaleLowerCase('ru')
-  if (q.length < 2) return []
-  const districts = map.districts
-    .filter((d) => d.name.toLocaleLowerCase('ru').includes(q) || d.shortName.toLocaleLowerCase('ru').includes(q))
-    .map((d) => ({ kind: 'district' as const, id: d.id, title: d.shortName, subtitle: d.name }))
-  const buildings = map.buildingList
-    .filter((b) => b.name.toLocaleLowerCase('ru').includes(q))
-    .map((b) => ({ kind: 'building' as const, id: b.id, title: b.name, subtitle: b.discoveredAt ? 'Открыто' : 'Здание' }))
-  return [...districts, ...buildings].slice(0, 6)
-})
+// header (mockup карта.jpg): avatar, level with XP, coins and the streak
+/** streak from player_stats; null until loaded or when it failed — shown as «—» */
+const streak = ref<number | null>(null)
 
 const GEO_TEXT = {
   permission_denied: 'Нет доступа к геолокации',
@@ -112,6 +101,21 @@ const fogHint = computed(() => {
   if (map.selectedBuilding || map.selectedDistrict || outlines.selected || diagnosticsOpen.value) return false
   return !exploration.anyExploredIn(v.bbox)
 })
+/** the other game area to jump to: Zavidovo is ~100 km away and empty from afar (no okrugs, no basemap) */
+const otherArea = computed(() => {
+  const v = viewport.value
+  if (!v) return null
+  const here = gameAreaAt({ lng: (v.bbox.minLng + v.bbox.maxLng) / 2, lat: (v.bbox.minLat + v.bbox.maxLat) / 2 })
+  return here === 'zavidovo' ? { id: 'moscow' as const, label: 'Москва' } : { id: 'zavidovo' as const, label: 'Завидово' }
+})
+function goToArea(id: GameAreaId): void {
+  if (id === 'moscow') {
+    canvas.value?.showCity()
+    return
+  }
+  const [minLng, minLat, maxLng, maxLat] = GAME_AREAS.find((a) => a.id === id)!.bbox
+  canvas.value?.fitArea([[minLng, minLat], [maxLng, maxLat]], 14)
+}
 const showExploredState = ref<'idle' | 'loading' | 'none' | 'error'>('idle')
 async function showExplored(): Promise<void> {
   if (showExploredState.value === 'loading') return
@@ -212,18 +216,6 @@ function selectBuilding(id: string): void {
   if (b) canvas.value?.flyTo(b.lng, b.lat, 16)
 }
 
-function pick(hit: SearchHit): void {
-  query.value = ''
-  searchFocused.value = false
-  if (hit.kind === 'district') selectDistrict(hit.id)
-  else selectBuilding(hit.id)
-}
-
-function locate(): void {
-  if (map.position) canvas.value?.flyTo(map.position.lng, map.position.lat)
-  else void map.startTracking('user')
-}
-
 function openScanner(): void {
   if (map.selectedBuildingId) void router.push({ name: 'scan', params: { buildingId: map.selectedBuildingId } })
 }
@@ -245,7 +237,14 @@ onMounted(() => {
   // the Fog of War opens by itself: exploring starts as soon as location access is granted
   void exploration.autoStart()
   void map.loadDistricts()
-  void quests.load()
+  // crest on the clan button and the badge on the tasks button
+  void clan.load()
+  void tasks.load()
+  if (!profile.profile) void profile.load()
+  services()
+    .api.getPlayerStats()
+    .then((s) => (streak.value = s.streakDays))
+    .catch(() => (streak.value = null))
   void memories.load()
   if (header.value) {
     resize = new ResizeObserver(([entry]) => {
@@ -293,41 +292,21 @@ onBeforeUnmount(() => {
 
     <header ref="header" class="top">
       <div class="top__row">
-        <h1 class="top__title">{{ greeting }}</h1>
-        <div class="top__actions">
-          <RouterLink to="/profile" class="round round--gray" :aria-label="hasReward ? 'Есть награда за задание' : 'Задания'">
-            <FilledIcon name="bell" :size="22" />
-            <span v-if="hasReward" class="round__dot" />
-          </RouterLink>
-          <RouterLink to="/profile" class="round round--avatar" aria-label="Профиль">
-            <img v-if="profile.profile?.avatarUrl" :src="profile.profile.avatarUrl" alt="" />
-            <FigureAvatar v-else-if="profile.profile?.avatarKey" :figure="profile.profile.avatarKey" :size="46" />
-            <span v-else>{{ initials }}</span>
-          </RouterLink>
-        </div>
+        <RouterLink to="/profile" class="me" aria-label="Профиль">
+          <PlayerAvatar
+            class="me__avatar"
+            :url="profile.profile?.avatarUrl ?? null"
+            :figure="profile.profile?.avatarKey ?? null"
+            :name="profile.profile?.username ?? '?'"
+            :size="48"
+            :letters="2"
+          />
+          <LevelProgress class="me__level" :level="profile.profile?.level ?? null" :xp="profile.profile?.xp ?? 0" stacked />
+        </RouterLink>
+        <WalletStreak class="wallet" :coins="profile.profile?.coins ?? 0" :streak="streak" />
       </div>
 
-      <div class="search" :class="{ 'search--open': searchFocused && hits.length > 0 }">
-        <FilledIcon name="search" :size="20" class="search__icon" />
-        <label for="map-search" class="visually-hidden">Поиск района или здания</label>
-        <input
-          id="map-search"
-          v-model="query"
-          type="search"
-          placeholder="Поиск"
-          autocomplete="off"
-          enterkeyhint="search"
-          @focus="searchFocused = true"
-          @blur="searchFocused = false"
-          @keydown.enter="hits[0] && pick(hits[0])"
-        />
-        <ul v-if="searchFocused && hits.length > 0" class="search__results" role="listbox">
-          <li v-for="hit in hits" :key="hit.kind + hit.id" role="option" @mousedown.prevent="pick(hit)">
-            <strong>{{ hit.title }}</strong>
-            <span>{{ hit.subtitle }}</span>
-          </li>
-        </ul>
-      </div>
+      <CategoryChips class="top__cats" />
 
       <div class="chips" aria-live="polite">
         <span v-if="map.geoError" class="chip chip--warn">{{ GEO_TEXT[map.geoError.code] }}</span>
@@ -345,28 +324,26 @@ onBeforeUnmount(() => {
       />
     </Transition>
 
-    <RouterLink
-      v-if="!map.selectedBuilding && !map.selectedDistrict && !outlines.selected"
-      to="/scan"
-      class="ar-scan"
-      aria-label="Сканировать здание камерой"
-    >
-      <AppIcon name="camera" />
-    </RouterLink>
-
-    <button
-      v-if="!map.selectedBuilding && !map.selectedDistrict && !outlines.selected"
-      class="locate"
-      aria-label="Моё местоположение"
-      @click="locate"
-    >
-      <AppIcon name="locate" />
-    </button>
+    <template v-if="!map.selectedBuilding && !map.selectedDistrict && !outlines.selected">
+      <button class="sheet-btn sheet-btn--clan" aria-label="Клан" @click="sheet = 'clan'">
+        <ClanAvatar v-if="clan.membership" :url="clan.membership.clan.avatarUrl" :tag="clan.membership.clan.tag" :size="44" />
+        <AppIcon v-else name="shield" :size="26" />
+      </button>
+      <button class="sheet-btn sheet-btn--tasks" :aria-label="tasks.ready ? `Задания: наград к получению — ${tasks.ready}` : 'Задания'" @click="sheet = 'tasks'">
+        <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="M9 2.5h6a1.5 1.5 0 0 1 1.5 1.5H18a2 2 0 0 1 2 2v13.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1.5A1.5 1.5 0 0 1 9 2.5Zm-1 9.5a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2H8Zm0 4a1 1 0 1 0 0 2h5a1 1 0 1 0 0-2H8Z"
+          />
+        </svg>
+        <span v-if="tasks.ready" class="sheet-btn__badge" aria-hidden="true">{{ tasks.ready }}</span>
+      </button>
+    </template>
 
     <div class="bottom">
       <div
         class="chips chips--bottom"
-        :class="{ 'chips--beside-locate': !map.selectedBuilding && !map.selectedDistrict && !outlines.selected }"
+        :class="{ 'chips--beside-buttons': !map.selectedBuilding && !map.selectedDistrict && !outlines.selected }"
         aria-live="polite"
       >
         <div v-if="fogHint" class="chip chip--hint" role="status">
@@ -396,6 +373,14 @@ onBeforeUnmount(() => {
         >
           {{ exploreChip.text }}
         </button>
+        <button
+          v-if="otherArea && !map.selectedBuilding && !map.selectedDistrict && !outlines.selected"
+          type="button"
+          class="chip"
+          @click="goToArea(otherArea.id)"
+        >
+          {{ otherArea.label }} ›
+        </button>
         <button v-if="isAdmin" class="chip" :aria-pressed="fogOn" @click="fogLifted = !fogLifted">
           Туман: {{ fogOn ? 'вкл' : 'выкл' }} (админ)
         </button>
@@ -420,6 +405,13 @@ onBeforeUnmount(() => {
       />
       <DistrictCard v-else-if="map.selectedDistrict" :district="map.selectedDistrict" @close="selectDistrict(null)" />
     </div>
+
+    <Transition name="sheet">
+      <ClanSheet v-if="sheet === 'clan'" @close="sheet = null" />
+    </Transition>
+    <Transition name="sheet">
+      <TasksSheet v-if="sheet === 'tasks'" @close="sheet = null" />
+    </Transition>
 
     <MemoryEditor
       v-if="memoryFor"
@@ -451,110 +443,45 @@ onBeforeUnmount(() => {
   left: 0;
   right: 0;
   z-index: 10;
-  padding: calc(var(--safe-top) + 18px) 16px 18px;
-  background: var(--c-surface);
-  border-radius: 0 0 36px 36px;
+  padding: calc(var(--safe-top) + 16px) 16px 24px;
+  // sky over the map, as in the mockup; the map shows through below
+  background: linear-gradient(180deg, rgb(140 200 255 / 85%) 0%, rgb(190 225 255 / 55%) 55%, rgb(255 255 255 / 0%) 100%);
+  // the gradient's lower part must not block the map
+  pointer-events: none;
+  > * {
+    pointer-events: auto;
+  }
 }
 .top__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-.top__title {
-  font-size: 30px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-.top__actions {
-  display: flex;
   gap: 10px;
 }
-.round {
-  position: relative;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
+.top__cats {
+  margin-top: 16px;
+}
+.me {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
   text-decoration: none;
-  overflow: hidden;
-  &--gray {
-    background: #e6e6e7;
-    color: var(--c-text);
-    overflow: visible;
-  }
-  &--avatar {
-    background: var(--c-text);
-    color: #fff;
-    font-weight: 700;
-    img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-  }
 }
-.round__dot {
-  position: absolute;
-  top: 9px;
-  right: 10px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--c-brand-pink);
-  box-shadow: 0 0 0 2px #e6e6e7;
+.me__avatar {
+  border: 2px solid #fff;
+  background: #fff;
+  color: #000;
 }
-
-.search {
-  position: relative;
-  input {
-    width: 100%;
-    height: 46px;
-    border: 0;
-    border-radius: var(--r-pill);
-    background: var(--c-field);
-    padding: 0 16px 0 46px;
-    font-size: 17px;
-    outline: none;
-    &::placeholder {
-      color: #8e8e93;
-    }
-  }
+.me__level {
+  flex: 1;
+  max-width: 130px;
 }
-.search__icon {
-  position: absolute;
-  left: 16px;
-  top: 13px;
-  color: #8e8e93;
-  pointer-events: none;
-}
-.search__results {
-  position: absolute;
-  top: 52px;
-  left: 0;
-  right: 0;
-  margin: 0;
-  padding: 6px;
-  list-style: none;
-  background: var(--c-surface);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-card);
-  li {
-    display: flex;
-    flex-direction: column;
-    padding: 10px 12px;
-    border-radius: 14px;
-    cursor: pointer;
-    &:hover {
-      background: var(--c-surface-2);
-    }
-    span {
-      font-size: 13px;
-      color: var(--c-text-2);
-    }
-  }
+.wallet {
+  flex: none;
+  background: #fff;
 }
 
 .chips {
@@ -570,9 +497,16 @@ onBeforeUnmount(() => {
   &--bottom .chip {
     box-shadow: var(--shadow-card);
   }
-  // keep clear of the locate button, which sits at the same right edge
-  &--beside-locate {
-    padding-right: 60px;
+  // keep clear of the clan (left) and tasks (right) buttons on the same row
+  &--beside-buttons {
+    padding: 0 60px;
+  }
+  // the row spans the whole width: only the chips themselves take taps, the gaps let them through
+  &--bottom {
+    pointer-events: none;
+    > * {
+      pointer-events: auto;
+    }
   }
 }
 .chip {
@@ -629,35 +563,44 @@ onBeforeUnmount(() => {
   opacity: 0;
 }
 
-.locate {
+// clan (left) and tasks (right) buttons, as in the mockup (карта.png)
+.sheet-btn {
   position: absolute;
-  right: 16px;
-  bottom: calc(var(--nav-height) + var(--safe-bottom) + 40px);
   z-index: 5;
-  width: 48px;
-  height: 48px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--c-surface);
-  box-shadow: var(--shadow-card);
+  width: 52px;
+  height: 52px;
   display: grid;
   place-items: center;
-  color: var(--c-accent);
+  padding: 0;
+  border: 3px solid #e3eefd;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: var(--shadow-card);
+  color: #1c1c1e;
 }
-
-.ar-scan {
-  position: absolute;
+.sheet-btn--clan {
+  left: 16px;
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + 38px);
+  overflow: hidden;
+}
+.sheet-btn--tasks {
   right: 16px;
-  bottom: calc(var(--nav-height) + var(--safe-bottom) + 100px);
-  z-index: 5;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--c-accent);
-  box-shadow: var(--shadow-card);
-  display: grid;
-  place-items: center;
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + 38px);
+}
+.sheet-btn__badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border: 2px solid #fff;
+  border-radius: 10px;
+  background: #ff3b30;
   color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
 }
 
 .bottom {
@@ -666,5 +609,11 @@ onBeforeUnmount(() => {
   right: 12px;
   bottom: calc(var(--nav-height) + var(--safe-bottom) + 16px);
   z-index: 6;
+  // it lies over the clan and tasks buttons: its empty area must not swallow their taps
+  pointer-events: none;
+  // cards take taps; the chips row decides for itself (only its chips do)
+  > :not(.chips) {
+    pointer-events: auto;
+  }
 }
 </style>

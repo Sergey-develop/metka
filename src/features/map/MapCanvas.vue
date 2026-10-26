@@ -142,7 +142,7 @@ defineExpose({ flyTo, fitDistrict, showCity, fitArea })
 <template>
   <div class="map-canvas">
     <div ref="container" class="map-canvas__map" role="application" aria-label="Карта города" />
-    <!-- ODbL: footprints come from OpenStreetMap; Yandex shows its own copyrights separately -->
+    <!-- ODbL: footprints come from OpenStreetMap — required by the data licence, kept when Yandex's are hidden -->
     <a
       v-if="outlines.length > 0"
       class="map-canvas__osm"
@@ -169,16 +169,24 @@ defineExpose({ flyTo, fitDistrict, showCity, fitArea })
   background: var(--c-map-bg);
 }
 
-/* ends above the tab bar so the Yandex logo and copyrights stay visible (terms of use) */
+/* ends above the tab bar */
 .map-canvas__map {
   position: absolute;
   inset: 0 0 calc(var(--nav-height) + var(--safe-bottom));
 }
 
+/*
+ * Yandex logo, copyrights and the terms link hidden at the owner's request (2026-10-26), against the
+ * JS API terms of use — Yandex may revoke the key (PROJECT_STATUS.md, blockers).
+ */
+.map-canvas__map :deep([class^='ymaps3'][class*='copyrights']) {
+  display: none !important;
+}
+
 .map-canvas__osm {
   position: absolute;
   right: 8px;
-  bottom: calc(var(--nav-height) + var(--safe-bottom) + 30px);
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + 8px);
   padding: 2px 6px;
   border-radius: 4px;
   background: rgb(255 255 255 / 80%);

@@ -58,7 +58,8 @@ async function submit(): Promise<void> {
     <OAuthButtons @error="error = $event" />
     <div class="form__links">
       <RouterLink to="/auth/reset">Забыли пароль?</RouterLink>
-      <RouterLink to="/auth/register">Создать аккаунт</RouterLink>
+      <RouterLink :to="{ name: 'login', query: route.query }">По телефону</RouterLink>
+      <RouterLink :to="{ name: 'register-email' }">Создать аккаунт</RouterLink>
     </div>
   </form>
 </template>

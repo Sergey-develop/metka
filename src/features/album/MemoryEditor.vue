@@ -5,7 +5,11 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 import type { MemoryPlace } from '@/services/memories/memoriesService'
 import { useMemoriesStore } from '@/stores/memories'
 import type { Impression, Memory } from '@/types/game'
+import { useScrollLock } from '@/utils/scrollLock'
 import MemorySticker from './MemorySticker.vue'
+
+// the page behind stays still while this is open
+useScrollLock()
 
 /** Bottom sheet: create/edit the memory of an unlocked building. */
 const props = defineProps<{
@@ -15,6 +19,21 @@ const props = defineProps<{
   fallbackPhoto?: string | null
 }>()
 const emit = defineEmits<{ close: []; saved: [memory: Memory] }>()
+
+// opens with a slide up (CSS, on mount); closing plays the slide down first, then tells the parent
+const LEAVE_MS = 260
+const leaving = ref(false)
+let leaveTimer: ReturnType<typeof setTimeout> | null = null
+function close(): void {
+  if (leaving.value) return
+  const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (reduced) return emit('close')
+  leaving.value = true
+  leaveTimer = setTimeout(() => emit('close'), LEAVE_MS)
+}
+onBeforeUnmount(() => {
+  if (leaveTimer) clearTimeout(leaveTimer)
+})
 
 const memories = useMemoriesStore()
 const current = computed(() => memories.byBuilding.get(props.buildingId) ?? null)
@@ -86,7 +105,7 @@ async function save(): Promise<void> {
       props.place,
     )
     emit('saved', saved)
-    emit('close')
+    close()
   } catch (e) {
     const code = e instanceof Error && 'code' in e ? String((e as { code: unknown }).code) : ''
     error.value = ERRORS[code] ?? 'Не удалось сохранить, попробуйте ещё раз.'
@@ -100,7 +119,7 @@ async function remove(): Promise<void> {
   error.value = null
   try {
     await memories.remove(props.buildingId)
-    emit('close')
+    close()
   } catch {
     error.value = 'Не удалось удалить, попробуйте ещё раз.'
   } finally {
@@ -114,70 +133,73 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="backdrop" @click.self="emit('close')">
-    <form class="editor card" aria-label="Воспоминание" @submit.prevent="save">
-      <header class="editor__head">
-        <div>
-          <p class="editor__kind">Воспоминание</p>
-          <h2 class="editor__title">{{ place.buildingName }}</h2>
-          <p v-if="place.address" class="editor__address">{{ place.address }}</p>
+  <!-- to the body: opened inside a sheet (diary, map) it would sit under the tab bar (its z-index 50 counts only there) -->
+  <Teleport to="body">
+    <div class="backdrop" :class="{ 'backdrop--leaving': leaving }" @click.self="close">
+      <form class="editor card" aria-label="Воспоминание" @submit.prevent="save">
+        <header class="editor__head">
+          <div>
+            <p class="editor__kind">Воспоминание</p>
+            <h2 class="editor__title">{{ place.buildingName }}</h2>
+            <p v-if="place.address" class="editor__address">{{ place.address }}</p>
+          </div>
+          <button type="button" class="editor__close" aria-label="Закрыть" @click="close">
+            <AppIcon name="close" :size="16" />
+          </button>
+        </header>
+
+        <div class="photo">
+          <img v-if="preview" :src="preview" :alt="place.buildingName" class="photo__img" />
+          <label class="photo__pick">
+            <input type="file" accept="image/*" class="visually-hidden" @change="pickPhoto" />
+            {{ preview ? 'Заменить фото' : 'Добавить фото' }}
+          </label>
+          <button v-if="ownPhoto" type="button" class="photo__remove" @click="dropPhoto">
+            {{ fallbackPhoto ? 'Вернуть прежнее фото' : 'Убрать' }}
+          </button>
         </div>
-        <button type="button" class="editor__close" aria-label="Закрыть" @click="emit('close')">
-          <AppIcon name="close" :size="16" />
-        </button>
-      </header>
 
-      <div class="photo">
-        <img v-if="preview" :src="preview" :alt="place.buildingName" class="photo__img" />
-        <label class="photo__pick">
-          <input type="file" accept="image/*" class="visually-hidden" @change="pickPhoto" />
-          {{ preview ? 'Заменить фото' : 'Добавить фото' }}
-        </label>
-        <button v-if="ownPhoto" type="button" class="photo__remove" @click="dropPhoto">
-          {{ fallbackPhoto ? 'Вернуть прежнее фото' : 'Убрать' }}
-        </button>
-      </div>
+        <fieldset class="impressions">
+          <legend>Впечатление</legend>
+          <button
+            v-for="i in IMPRESSIONS"
+            :key="i.value"
+            type="button"
+            class="impression"
+            :class="{ 'impression--on': impression === i.value }"
+            :aria-pressed="impression === i.value"
+            @click="impression = impression === i.value ? null : i.value"
+          >
+            <MemorySticker :impression="i.value" />
+            {{ i.label }}
+          </button>
+        </fieldset>
 
-      <fieldset class="impressions">
-        <legend>Впечатление</legend>
         <button
-          v-for="i in IMPRESSIONS"
-          :key="i.value"
           type="button"
-          class="impression"
-          :class="{ 'impression--on': impression === i.value }"
-          :aria-pressed="impression === i.value"
-          @click="impression = impression === i.value ? null : i.value"
+          class="favorite"
+          :class="{ 'favorite--on': isFavorite }"
+          :aria-pressed="isFavorite"
+          @click="isFavorite = !isFavorite"
         >
-          <MemorySticker :impression="i.value" />
-          {{ i.label }}
+          <span aria-hidden="true">{{ isFavorite ? '♥' : '♡' }}</span> Любимое место
         </button>
-      </fieldset>
 
-      <button
-        type="button"
-        class="favorite"
-        :class="{ 'favorite--on': isFavorite }"
-        :aria-pressed="isFavorite"
-        @click="isFavorite = !isFavorite"
-      >
-        <span aria-hidden="true">{{ isFavorite ? '♥' : '♡' }}</span> Любимое место
-      </button>
+        <label class="field">
+          <span>Дата посещения</span>
+          <input v-model="visitedOn" type="date" :max="today" />
+        </label>
+        <label class="field">
+          <span>Заметка</span>
+          <textarea v-model="note" rows="3" maxlength="2000" placeholder="Что запомнилось?" />
+        </label>
 
-      <label class="field">
-        <span>Дата посещения</span>
-        <input v-model="visitedOn" type="date" :max="today" />
-      </label>
-      <label class="field">
-        <span>Заметка</span>
-        <textarea v-model="note" rows="3" maxlength="2000" placeholder="Что запомнилось?" />
-      </label>
-
-      <p v-if="error" class="editor__error" role="alert">{{ error }}</p>
-      <AppButton type="submit" block :loading="saving">Сохранить</AppButton>
-      <AppButton v-if="current" variant="ghost" block :loading="deleting" @click="remove">Удалить воспоминание</AppButton>
-    </form>
-  </div>
+        <p v-if="error" class="editor__error" role="alert">{{ error }}</p>
+        <AppButton type="submit" block :loading="saving">Сохранить</AppButton>
+        <AppButton v-if="current" variant="ghost" block :loading="deleting" @click="remove">Удалить воспоминание</AppButton>
+      </form>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped lang="scss">
@@ -188,11 +210,50 @@ onBeforeUnmount(() => {
   background: rgb(0 0 0 / 35%);
   display: flex;
   align-items: flex-end;
+  // iOS-like sheet: the dim fades in, the card slides up from the bottom edge (no overshoot)
+  animation: editor-dim-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+  .editor {
+    animation: editor-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+.backdrop--leaving {
+  animation: editor-dim-out 0.26s ease-in both;
+  pointer-events: none;
+  .editor {
+    animation: editor-down 0.26s cubic-bezier(0.4, 0, 1, 1) both;
+  }
+}
+@keyframes editor-dim-in {
+  from {
+    background-color: rgb(0 0 0 / 0%);
+  }
+}
+@keyframes editor-dim-out {
+  to {
+    background-color: rgb(0 0 0 / 0%);
+  }
+}
+@keyframes editor-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes editor-down {
+  to {
+    transform: translateY(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .backdrop .editor {
+    animation: none;
+  }
 }
 .editor {
   width: 100%;
   max-height: 92vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 18px 16px calc(16px + var(--safe-bottom));
   border-radius: 24px 24px 0 0;
   display: flex;

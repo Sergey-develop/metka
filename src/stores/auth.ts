@@ -45,6 +45,15 @@ export const useAuthStore = defineStore('auth', () => {
     sessionExpired.value = false
   }
 
+  async function requestPhoneCode(phone: string): Promise<void> {
+    await services().auth.requestPhoneCode(phone)
+  }
+
+  async function verifyPhoneCode(phone: string, code: string): Promise<void> {
+    await services().auth.verifyPhoneCode(phone, code)
+    sessionExpired.value = false
+  }
+
   async function signUp(emailValue: string, password: string): Promise<boolean> {
     return services().auth.signUp(emailValue, password)
   }
@@ -89,6 +98,8 @@ export const useAuthStore = defineStore('auth', () => {
     email,
     init,
     signIn,
+    requestPhoneCode,
+    verifyPhoneCode,
     signUp,
     verifyEmailCode,
     resendConfirmation,

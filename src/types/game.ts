@@ -239,7 +239,16 @@ export interface Clan {
 export interface ClanMembership {
   clan: Clan
   role: 'owner' | 'member'
-  members: { userId: string; username: string; level: number; role: 'owner' | 'member' }[]
+  /** in joining order */
+  members: {
+    userId: string
+    username: string
+    level: number
+    role: 'owner' | 'member'
+    /** public URL of the uploaded avatar; takes precedence over avatarKey */
+    avatarUrl: string | null
+    avatarKey: AvatarKey | null
+  }[]
 }
 
 export interface ClanRanking {
@@ -250,6 +259,154 @@ export interface ClanRanking {
   members: number
   points: number
   rank: number
+}
+
+/**
+ * player_public_profile() (migration 019): another player's profile, clanmates only.
+ * No coins, memories, favourites or photos — those stay private.
+ */
+export interface PublicProfile {
+  profile: {
+    id: string
+    username: string
+    avatarUrl: string | null
+    avatarKey: AvatarKey | null
+    level: number
+    xp: number
+    buildingsDiscovered: number
+    homeDistrictId: string | null
+  }
+  stats: PlayerStats
+  progress: Omit<PlayerProgress, 'memories' | 'favoritePlaces'>
+  /** district id → buildings this player found there */
+  discoveredByDistrict: Record<string, number>
+  achievements: Pick<QuestView, 'id' | 'slug' | 'title' | 'description' | 'kind' | 'target' | 'progress' | 'completedAt'>[]
+  /** rarest first; catalog pictures only */
+  bestFinds: { buildingId: string; name: string; rarity: Rarity; imageUrl: string | null }[]
+}
+
+export const TASK_KINDS = ['discover', 'cells', 'rare', 'memory', 'districts'] as const
+export type TaskKind = (typeof TASK_KINDS)[number]
+
+/** A task of the day or week (migration 020); progress is counted on the server for the current period. */
+export interface GameTask {
+  slug: string
+  period: 'day' | 'week'
+  kind: TaskKind
+  title: string
+  target: number
+  /** capped at target */
+  progress: number
+  rewardCoins: number
+  claimed: boolean
+}
+
+/** my_tasks(): the tasks sheet on the map */
+export interface TasksState {
+  dayEndsAt: string
+  weekEndsAt: string
+  tasks: GameTask[]
+  /** the active server quest with an end date (claimed through claim_quest_reward); null — no season now */
+  season: {
+    id: string
+    title: string
+    description: string
+    target: number
+    progress: number
+    rewardCoins: number
+    endsAt: string
+    completed: boolean
+    claimed: boolean
+  } | null
+}
+
+export const STYLE_COLLECTIONS = ['constructivism', 'stalinist', 'water_tower'] as const
+export type StyleCollectionId = (typeof STYLE_COLLECTIONS)[number]
+
+/** style_collections() (migration 021): OSM buildings of a style the player walked past; rarity counts. */
+export interface StyleCollections {
+  collections: { id: StyleCollectionId; collected: number; total: number }[]
+  rarity: { rarity: Exclude<Rarity, 'common'>; found: number; total: number }[]
+}
+
+/** landmark_collections() (migration 023): curated places the player marks on site */
+export interface LandmarkCollection {
+  id: string
+  title: string
+  items: { id: string; name: string; marked: boolean }[]
+}
+
+export const EVENT_KINDS = ['run', 'walk', 'reading', 'cleanup'] as const
+export type EventKind = (typeof EVENT_KINDS)[number]
+
+export interface EventPerson {
+  userId: string
+  username: string
+  avatarUrl: string | null
+  avatarKey: AvatarKey | null
+}
+
+/** A player event (migration 018): events_feed() / event_page(). */
+export interface GameEvent {
+  id: string
+  kind: EventKind
+  title: string
+  description: string | null
+  lat: number
+  lng: number
+  /** address of the nearest building, derived on the server; null — just a point on the map */
+  placeName: string | null
+  startsAt: string
+  maxParticipants: number
+  /** public URL of the uploaded cover; null — the kind's illustration */
+  coverUrl: string | null
+  /** includes the organizer */
+  participants: number
+  joined: boolean
+  organizer: EventPerson
+  /** first participants in joining order (4 in the feed, 8 on the event page) */
+  faces: EventPerson[]
+}
+
+export interface EventDraft {
+  kind: EventKind
+  title: string
+  description: string
+  lat: number
+  lng: number
+  startsAt: Date
+  maxParticipants: number
+  /** re-encoded picture (EXIF stripped); null — no cover */
+  cover: Blob | null
+}
+
+/** clan_page(): the clan screen of the player's own clan; every number is counted on the server. */
+export interface ClanPage {
+  clan: Clan & { members: number; maxMembers: number }
+  week: {
+    /** days left in the Moscow week, today included (Monday 7 … Sunday 1) */
+    daysLeft: number
+    /** cells opened this week in the owner's home district (null — anywhere) */
+    goal: { target: number; progress: number; districtId: string | null; districtName: string | null }
+  }
+  /** in joining order */
+  members: {
+    userId: string
+    username: string
+    level: number
+    role: 'owner' | 'member'
+    avatarUrl: string | null
+    avatarKey: AvatarKey | null
+    /** cells opened this week, anywhere */
+    weekCells: number
+  }[]
+  ownedDistrictIds: string[]
+  metrics: { level: number; exploredCells: number; discoveries: number }
+  /** newest first */
+  chronicle: (
+    | { kind: 'discovery'; at: string; username: string; buildingName: string; rarity: Rarity }
+    | { kind: 'joined'; at: string; username: string }
+  )[]
 }
 
 export interface PlayerRanking {
@@ -277,6 +434,7 @@ export interface Memory {
   isFavorite: boolean
   /** private Storage path; display via signed URL */
   photoPath: string | null
+  createdAt: string
   updatedAt: string
 }
 
@@ -290,6 +448,18 @@ export interface MemoryDraft {
   photo?: Blob | null
   /** drop the current photo */
   removePhoto?: boolean
+}
+
+/** player_stats() (migration 015): profile numbers counted on the server; see the migration for definitions. */
+export interface PlayerStats {
+  /** Moscow calendar day on the server, YYYY-MM-DD */
+  today: string
+  streakDays: number
+  /** active days of the last 84, ascending, YYYY-MM-DD */
+  activeDays: string[]
+  streets: { visited: number; total: number; scope: 'home' | 'all' }
+  /** null — not in a clan */
+  clan: { level: number; discoveries: number } | null
 }
 
 /** player_progress(): each number comes from its own table. */

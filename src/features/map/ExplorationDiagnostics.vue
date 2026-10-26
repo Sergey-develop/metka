@@ -14,7 +14,7 @@ const REASONS: Record<string, string> = {
   inaccurate: 'неточно (хуже 35 м)',
   bad_time: 'неверное время',
   out_of_order: 'повтор / не по порядку',
-  outside_area: 'вне Москвы',
+  outside_area: 'вне игровой зоны',
   invalid: 'ошибка данных',
 }
 const serverRejected = computed(() =>

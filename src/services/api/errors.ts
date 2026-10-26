@@ -32,6 +32,15 @@ export type ApiErrorCode =
   | 'building_locked'
   | 'invalid_photo'
   | 'invalid_memory'
+  | 'invalid_event'
+  | 'too_many_events'
+  | 'event_not_found'
+  | 'event_started'
+  | 'event_full'
+  | 'event_creator'
+  | 'profile_hidden'
+  | 'task_not_found'
+  | 'task_not_completed'
 
 const DOMAIN_CODES = new Set<ApiErrorCode>([
   'quest_not_completed',
@@ -52,6 +61,15 @@ const DOMAIN_CODES = new Set<ApiErrorCode>([
   'building_locked',
   'invalid_photo',
   'invalid_memory',
+  'invalid_event',
+  'too_many_events',
+  'event_not_found',
+  'event_started',
+  'event_full',
+  'event_creator',
+  'profile_hidden',
+  'task_not_found',
+  'task_not_completed',
 ])
 
 function isDomainCode(value: string): value is ApiErrorCode {

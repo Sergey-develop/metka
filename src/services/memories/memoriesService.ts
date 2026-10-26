@@ -49,11 +49,12 @@ function parseMemory(o: Json, building: Json): Memory {
     impression: o.impression === null || o.impression === undefined ? null : oneOf(o, 'impression', IMPRESSIONS),
     isFavorite: bool(o, 'is_favorite'),
     photoPath: strOrNull(o, 'photo_path'),
+    createdAt: str(o, 'created_at'),
     updatedAt: str(o, 'updated_at'),
   }
 }
 
-const COLUMNS = 'id, building_id, note, visited_on, impression, is_favorite, photo_path, updated_at, buildings(name, address, rarity)'
+const COLUMNS = 'id, building_id, note, visited_on, impression, is_favorite, photo_path, created_at, updated_at, buildings(name, address, rarity)'
 
 export class SupabaseMemoriesService implements MemoriesService {
   constructor(

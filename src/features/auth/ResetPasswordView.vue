@@ -41,7 +41,7 @@ async function submit(): Promise<void> {
       <AppButton type="submit" block :loading="pending" :disabled="!canSubmit">Отправить ссылку</AppButton>
     </template>
     <div class="form__links">
-      <RouterLink to="/auth/login">Ко входу</RouterLink>
+      <RouterLink :to="{ name: 'login-email' }">Ко входу</RouterLink>
     </div>
   </form>
 </template>

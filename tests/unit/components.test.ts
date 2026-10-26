@@ -11,7 +11,7 @@ import { BUILDING, decision, installFakeServices } from './helpers'
 function router() {
   return createRouter({
     history: createMemoryHistory(),
-    routes: ['/map', '/results', '/quests', '/collection', '/profile', '/clan'].map((path) => ({ path, component: { template: '<div/>' } })),
+    routes: ['/map', '/scan', '/locations', '/events', '/results', '/quests', '/collection', '/profile', '/clan'].map((path) => ({ path, component: { template: '<div/>' } })),
   })
 }
 
@@ -43,15 +43,15 @@ describe('BuildingCard', () => {
 })
 
 describe('BottomNav', () => {
-  it('renders four tabs (results second, profile last) and labels only the active one', async () => {
+  it('renders Ar, Локации, map button, Ивенты, Профиль in mockup order', async () => {
     const r = router()
-    await r.push('/results')
+    await r.push('/events')
     const w = mount(BottomNav, { global: { plugins: [r] } })
     const tabs = w.findAll('a')
-    expect(tabs).toHaveLength(4)
-    expect(tabs[1]?.attributes('href')).toBe('/results')
-    expect(tabs[3]?.attributes('href')).toBe('/profile')
-    expect(w.find('[aria-current="page"]').text()).toBe('Результаты')
+    expect(tabs.map((t) => t.attributes('href'))).toEqual(['/scan', '/locations', '/map', '/events', '/profile'])
+    expect(tabs.map((t) => t.text())).toEqual(['Ar', 'Локации', '', 'Ивенты', 'Профиль'])
+    expect(tabs[2]?.attributes('aria-label')).toBe('Карта')
+    expect(w.find('[aria-current="page"]').text()).toBe('Ивенты')
   })
 })
 

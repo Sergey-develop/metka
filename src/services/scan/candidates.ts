@@ -10,6 +10,15 @@ import type { BuildingOutline } from '@/types/game'
  * Method: rays are cast across a cone around the heading; each ray stops at the first footprint
  * edge it meets (nearer buildings hide farther ones). A building's score is the weighted share of
  * rays that hit it first; the cone widens with compass and GPS uncertainty.
+ *
+ * A GPS fix inside a footprint is usually GPS error next to that very building (5–30 m by a wall):
+ * the rays look out of it, but nothing is picked automatically — the player chooses, and that
+ * building is offered first. Otherwise the rays pass through it and pick the house behind.
+ *
+ * A winner must also survive the GPS error: the view is cast again from points around the fix
+ * (within its accuracy) and the same building has to win from most of them. Next to a corner or
+ * with another house close behind, a few metres of GPS drift change the answer — then the player
+ * chooses instead of the app guessing.
  */
 
 export interface ScanPosition {
@@ -42,7 +51,7 @@ export interface NearbyBuilding {
 export type MatchStatus =
   /** one building clearly dominates the view (still approximate) */
   | 'likely'
-  /** several buildings share the view or the compass is too rough: the player chooses */
+  /** several buildings share the view, the compass is too rough or the GPS fix is inside a footprint: the player chooses */
   | 'ambiguous'
   /** the view cone hits no known building within range */
   | 'none'
@@ -62,6 +71,8 @@ export interface MatchResult {
   nearby: NearbyBuilding[]
   /** footprint the GPS position falls into (usually GPS error, or the player is indoors) */
   insideId: number | null
+  /** share of points around the fix (within the GPS accuracy) from which `best` also wins; 1 when not checked */
+  gpsAgreement: number
 }
 
 export const MATCH = {
@@ -75,6 +86,13 @@ export const MATCH = {
   rayStepDeg: 1,
   minScore: 0.55,
   minMargin: 0.25,
+  /** points around the fix, at this share of the GPS accuracy, from which the view is re-cast */
+  gpsSamples: 8,
+  gpsSampleRadius: 0.7,
+  /** the winner must win from at least this share of those points (outside footprints) */
+  minGpsAgreement: 0.75,
+  /** rays of the re-cast views are this far apart (cheaper than the main view) */
+  sampleRayStepDeg: 2,
   nearbyRadiusM: 80,
   nearbyLimit: 6,
 } as const
@@ -116,14 +134,16 @@ function shapeOf(outline: BuildingOutline, toPt: (p: GeoJSON.Position) => Pt): S
   return { outline, rings, outers }
 }
 
-/** ray from the origin along unit (dx, dy) against segment a→b; distance or null */
-function raySegment(dx: number, dy: number, a: Pt, b: Pt): number | null {
+/** ray from `o` along unit (dx, dy) against segment a→b; distance or null */
+function raySegment(o: Pt, dx: number, dy: number, a: Pt, b: Pt): number | null {
+  const ax = a[0] - o[0]
+  const ay = a[1] - o[1]
   const ex = b[0] - a[0]
   const ey = b[1] - a[1]
   const denom = dx * ey - dy * ex
   if (Math.abs(denom) < 1e-12) return null // parallel
-  const t = (a[0] * ey - a[1] * ex) / denom
-  const u = (a[0] * dy - a[1] * dx) / denom
+  const t = (ax * ey - ay * ex) / denom
+  const u = (ax * dy - ay * dx) / denom
   return t >= 0 && u >= 0 && u <= 1 ? t : null
 }
 
@@ -152,8 +172,10 @@ function distanceTo(shape: Shape): number {
   return best
 }
 
-/** first footprint hit along a ray: [shape index, distance] */
-function castRay(shapes: Shape[], skip: number, deg: number): [number, number] | null {
+const PLAYER: Pt = [0, 0]
+
+/** first footprint hit along a ray from `o`: [shape index, distance] */
+function castRay(shapes: Shape[], skip: number, deg: number, o: Pt = PLAYER): [number, number] | null {
   const dx = Math.sin(deg * RAD)
   const dy = Math.cos(deg * RAD)
   let hit: [number, number] | null = null
@@ -161,12 +183,43 @@ function castRay(shapes: Shape[], skip: number, deg: number): [number, number] |
     if (idx === skip) return
     for (const ring of shape.rings) {
       for (let i = 1; i < ring.length; i++) {
-        const t = raySegment(dx, dy, ring[i - 1]!, ring[i]!)
+        const t = raySegment(o, dx, dy, ring[i - 1]!, ring[i]!)
         if (t !== null && t <= MATCH.maxRangeM && (hit === null || t < hit[1])) hit = [idx, t]
       }
     }
   })
   return hit
+}
+
+/** the building most of the (weighted) view cone from `o` hits first; null when it hits nothing */
+function winnerFrom(shapes: Shape[], o: Pt, headingDeg: number, coneDeg: number): number | null {
+  const sigma = coneDeg / 2
+  const weight = new Map<number, number>()
+  for (let a = -coneDeg; a <= coneDeg + 1e-9; a += MATCH.sampleRayStepDeg) {
+    const hit = castRay(shapes, -1, headingDeg + a, o)
+    if (hit) weight.set(hit[0], (weight.get(hit[0]) ?? 0) + Math.exp(-0.5 * (a / sigma) ** 2))
+  }
+  let best: number | null = null
+  for (const [idx, w] of weight) if (best === null || w > weight.get(best)!) best = idx
+  return best
+}
+
+/**
+ * Share of points around the fix (on a circle at gpsSampleRadius × accuracy) from which `winner`
+ * still wins. Points inside a footprint are skipped: the player is outdoors, they are not possible.
+ */
+function gpsAgreement(shapes: Shape[], winner: number, accuracyM: number, headingDeg: number, coneDeg: number): number {
+  const r = accuracyM * MATCH.gpsSampleRadius
+  let possible = 0
+  let agree = 0
+  for (let i = 0; i < MATCH.gpsSamples; i++) {
+    const a = (i / MATCH.gpsSamples) * 2 * Math.PI
+    const o: Pt = [r * Math.sin(a), r * Math.cos(a)]
+    if (shapes.some((sh) => sh.outers.some((ring) => contains(ring, o[0], o[1])))) continue
+    possible++
+    if (winnerFrom(shapes, o, headingDeg, coneDeg) === winner) agree++
+  }
+  return possible === 0 ? 1 : agree / possible
 }
 
 export function rankCandidates(position: ScanPosition, heading: ScanHeading | null, outlines: BuildingOutline[]): MatchResult {
@@ -181,7 +234,7 @@ export function rankCandidates(position: ScanPosition, heading: ScanHeading | nu
     .slice(0, MATCH.nearbyLimit)
   const base = { nearby, insideId: insideIdx >= 0 ? shapes[insideIdx]!.outline.id : null }
 
-  if (!heading) return { status: 'no_heading', candidates: [], best: null, margin: 0, coneDeg: 0, ...base }
+  if (!heading) return { status: 'no_heading', candidates: [], best: null, margin: 0, coneDeg: 0, gpsAgreement: 1, ...base }
 
   const headingAcc = heading.accuracyDeg ?? MATCH.defaultHeadingAccDeg
   // the player is never "looking at" the footprint the GPS puts them in
@@ -202,17 +255,25 @@ export function rankCandidates(position: ScanPosition, heading: ScanHeading | nu
     weight.set(hit[0], (weight.get(hit[0]) ?? 0) + w)
     nearest.set(hit[0], Math.min(nearest.get(hit[0]) ?? Infinity, hit[1]))
   }
-  const candidates = [...weight.entries()]
+  const seen = [...weight.entries()]
     .map(([idx, w]) => ({ outline: shapes[idx]!.outline, score: w / total, distanceM: nearest.get(idx)! }))
     .sort((a, b) => b.score - a.score || a.distanceM - b.distanceM)
-  const best = candidates[0] ?? null
-  const margin = best ? best.score - (candidates[1]?.score ?? 0) : 0
+  const best = seen[0] ?? null
+  const margin = best ? best.score - (seen[1]?.score ?? 0) : 0
+  // the building the fix is inside is offered first (score 0: no ray sees it)
+  const candidates = insideIdx >= 0 ? [{ outline: shapes[insideIdx]!.outline, score: 0, distanceM: 0 }, ...seen] : seen
 
   let status: MatchStatus
+  let agreement = 1
   if (position.accuracyM > MATCH.maxAccuracyM) status = 'inaccurate'
+  else if (insideIdx >= 0) status = 'ambiguous'
   else if (!best) status = 'none'
-  else if (headingAcc <= MATCH.maxHeadingAccDeg && best.score >= MATCH.minScore && margin >= MATCH.minMargin) status = 'likely'
-  else status = 'ambiguous'
+  else if (headingAcc <= MATCH.maxHeadingAccDeg && best.score >= MATCH.minScore && margin >= MATCH.minMargin) {
+    // only a clear winner is checked against the GPS error (the costly part)
+    const winner = shapes.findIndex((sh) => sh.outline === best.outline)
+    agreement = gpsAgreement(shapes, winner, position.accuracyM, heading.deg, coneDeg)
+    status = agreement >= MATCH.minGpsAgreement ? 'likely' : 'ambiguous'
+  } else status = 'ambiguous'
 
-  return { status, candidates, best, margin, coneDeg, ...base }
+  return { status, candidates, best, margin, coneDeg, gpsAgreement: agreement, ...base }
 }

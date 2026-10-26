@@ -13,7 +13,8 @@ import type {
   YMapMarker,
 } from '@yandex/ymaps3-types'
 import type { BuildingOutline, DistrictOverview, MapBuilding, Rarity } from '@/types/game'
-import { fogGeometry } from '@/services/exploration/fog'
+import { type FogArea, fogGeometry } from '@/services/exploration/fog'
+import { GAME_AREAS as GAME_AREA_LIST } from '@/utils/gameAreas'
 import { cellKey, cellOf, cellsToMultiPolygon, type Cell } from '@/services/exploration/grid'
 import { containsPoint, labelPoint, toLngLat } from '@/utils/mapGeometry'
 import type { YmapsApi } from './yandexLoader'
@@ -51,13 +52,19 @@ const DISTRICT_LABEL_MAX_ZOOM = 12.5
 const BASEMAP_MIN_ZOOM = STREET_LEVEL_ZOOM
 const DISTRICT_NEAR_ZOOM = BASEMAP_MIN_ZOOM
 /**
- * Panning stays within Moscow incl. New Moscow. Unlike `map.bounds` (top-left, bottom-right),
+ * The game areas [minLng, minLat, maxLng, maxLat]: Moscow incl. New Moscow, and the Zavidovo resort
+ * (Tver region). Mirrors in_game_area() on the server (migration 022), which only counts exploration
+ * inside them; the fog covers exactly these rectangles.
+ */
+const GAME_AREAS: readonly FogArea[] = GAME_AREA_LIST.map((area) => area.bbox)
+/**
+ * Panning stays within the box around all game areas. Unlike `map.bounds` (top-left, bottom-right),
  * restrictMapArea expects [south-west, north-east] — verified in Chrome against JS API 3.0.
  * The area must stay larger than the viewport at the minimum zoom, or Yandex misplaces the centre.
  */
 const MAP_AREA: LngLatBounds = [
-  [36.8, 55.1],
-  [38.4, 56.2],
+  [36.45, 55.1],
+  [38.4, 56.65],
 ]
 const MIN_ZOOM = 9.5
 /**
@@ -82,8 +89,6 @@ const TOP_SOURCE = 'metka-top'
 const TOP_FEATURES_Z_INDEX = 1600
 const TOP_MARKERS_SOURCE = 'metka-top-markers'
 const TOP_MARKERS_Z_INDEX = 1700
-/** the fogged area: the game area (Moscow incl. New Moscow), same as MAP_AREA */
-const FOG_AREA = [36.8, 55.1, 38.4, 56.2] as const
 /**
  * 0.85: the city stays visible under the fog (streets, blocks, names, metro), while walked land is
  * clearly brighter. Compared on screenshots at zoom 16–17: at 0.80 explored and unexplored look
@@ -659,7 +664,11 @@ export class YandexMapService implements MapService {
       return
     }
     if (this.fog?.cells === scene.exploredCells) return
-    const fog = fogGeometry(scene.exploredCells, FOG_AREA, { smooth: true }) as GeoJSON.MultiPolygon
+    // one fog polygon set per game area (they do not overlap)
+    const fog: GeoJSON.MultiPolygon = {
+      type: 'MultiPolygon',
+      coordinates: GAME_AREAS.flatMap((area) => fogGeometry(scene.exploredCells, area, { smooth: true }).coordinates),
+    } as GeoJSON.MultiPolygon
     const geometry = toYandexGeometry(fog)
     const borders = fogBorders(fog)
     const explored = new Set(scene.exploredCells.map(cellKey))

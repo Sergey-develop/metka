@@ -12,6 +12,7 @@ export const CONFIG: AppConfig = {
   yandexMapsApiKey: '00000000-0000-4000-8000-000000000000',
   recognitionManifestUrl: null,
   oauthProviders: [],
+  privacyPolicyUrl: null,
   useMocks: false,
   nativeAuthRedirect: 'app.metka.game://auth/callback',
 }

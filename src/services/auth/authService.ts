@@ -9,6 +9,8 @@ export type AuthErrorCode =
   | 'user_exists'
   | 'weak_password'
   | 'rate_limited'
+  | 'invalid_phone'
+  | 'phone_unavailable'
   | 'network'
   | 'session_expired'
   | 'unknown'
@@ -36,8 +38,12 @@ export function mapAuthError(error: AuthError | Error): AppAuthError {
   if (code === 'user_already_exists' || code === 'email_exists' || /already registered/i.test(message)) {
     return new AppAuthError('user_exists', message)
   }
+  if (code === 'sms_send_failed' || code === 'phone_provider_disabled' || /sms provider|unsupported phone provider/i.test(message)) {
+    return new AppAuthError('phone_unavailable', message)
+  }
+  if (code === 'validation_failed' && /phone/i.test(message)) return new AppAuthError('invalid_phone', message)
   if (code === 'weak_password' || /password should be/i.test(message)) return new AppAuthError('weak_password', message)
-  if (code === 'over_request_rate_limit' || code === 'over_email_send_rate_limit' || /rate limit/i.test(message)) {
+  if (code === 'over_request_rate_limit' || code === 'over_email_send_rate_limit' || code === 'over_sms_send_rate_limit' || /rate limit/i.test(message)) {
     return new AppAuthError('rate_limited', message)
   }
   if (code === 'session_expired' || code === 'refresh_token_not_found' || /refresh token/i.test(message)) {
@@ -102,6 +108,21 @@ export class AuthService {
       email,
       options: { emailRedirectTo: this.redirectUrl('/auth/callback') },
     })
+    if (error) throw mapAuthError(error)
+  }
+
+  /**
+   * Sends a one-time SMS code; an unknown number gets a new account (nickname comes at the setup step).
+   * Needs an SMS provider (or test numbers) configured in Supabase Auth → Phone.
+   * @param phone E.164, e.g. +79991234567
+   */
+  async requestPhoneCode(phone: string): Promise<void> {
+    const { error } = await this.client.auth.signInWithOtp({ phone, options: { shouldCreateUser: true, channel: 'sms' } })
+    if (error) throw mapAuthError(error)
+  }
+
+  async verifyPhoneCode(phone: string, code: string): Promise<void> {
+    const { error } = await this.client.auth.verifyOtp({ phone, token: code, type: 'sms' })
     if (error) throw mapAuthError(error)
   }
 

@@ -24,6 +24,10 @@
   --c-danger-soft: #fdecec;
   --c-warning: #d98a00;
   --c-warning-soft: #fff4dc;
+  /* buttons, measured on the mockups (дневник, клан, создание события): 50pt high, ~10pt corners */
+  --c-button: #0189ff;
+  --c-button-soft: #eff4fc;
+  --r-button: 10px;
 
   --r-sm: 12px;
   --r-md: 20px;
@@ -34,9 +38,12 @@
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --nav-height: 84px;
+  --nav-height: 88px;
 
-  --font: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;
+  // SF Pro first: on iPhone/Mac -apple-system is SF Pro (Text below 20pt, Display above — chosen by
+  // the system). SF Pro may not be bundled (Apple licence: Apple platforms only), so elsewhere the
+  // closest match, Inter (bundled, src/main.ts), takes over.
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Inter Variable', 'Inter', 'Roboto', 'Segoe UI', sans-serif;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   color-scheme: light;
 }

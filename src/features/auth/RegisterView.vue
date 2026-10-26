@@ -50,7 +50,7 @@ async function submit(): Promise<void> {
     <AppButton type="submit" block :loading="pending" :disabled="!canSubmit">Создать аккаунт</AppButton>
     <OAuthButtons @error="error = $event" />
     <div class="form__links">
-      <RouterLink to="/auth/login">Войти</RouterLink>
+      <RouterLink :to="{ name: 'login-email' }">Войти</RouterLink>
       <span>Уже есть аккаунт?</span>
     </div>
   </form>

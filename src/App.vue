@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import SplashScreen from '@/components/ui/SplashScreen.vue'
+import SplashScreen, { SPLASH_MS } from '@/components/ui/SplashScreen.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useClanStore } from '@/stores/clan'
+import { useEventsStore } from '@/stores/events'
 import { useCollectionStore } from '@/stores/collection'
 import { useMapStore } from '@/stores/map'
 import { useExplorationStore } from '@/stores/exploration'
@@ -12,17 +13,18 @@ import { useOutlinesStore } from '@/stores/outlines'
 import { useProfileStore } from '@/stores/profile'
 import { useQuestsStore } from '@/stores/quests'
 import { useScanStore } from '@/stores/scan'
+import { useTasksStore } from '@/stores/tasks'
 
 const auth = useAuthStore()
 const router = useRouter()
 const profile = useProfileStore()
 
-// brand splash while the stored session is restored (min. duration avoids a flash)
+// brand splash while the stored session is restored; it stays until its animation has played
 const minSplashDone = ref(false)
 // dev only: `?splash` keeps the splash on screen to inspect the loader animation
 const holdSplash = import.meta.env.DEV && new URLSearchParams(location.search).has('splash')
 onMounted(() => {
-  if (!holdSplash) setTimeout(() => (minSplashDone.value = true), 700)
+  if (!holdSplash) setTimeout(() => (minSplashDone.value = true), SPLASH_MS)
 })
 
 watch(
@@ -39,6 +41,8 @@ watch(
       useCollectionStore().reset()
       useQuestsStore().reset()
       useClanStore().reset()
+      useEventsStore().reset()
+      useTasksStore().reset()
       useScanStore().reset()
       void router.replace({ name: 'login' })
     }

@@ -357,8 +357,10 @@ describe('YandexMapService', () => {
     const f = fog()!
     expect(f.props.source).toBe('metka-fog')
     const coords = (f.props.geometry as { coordinates: unknown[][] }).coordinates
-    expect(coords).toHaveLength(1) // one fog polygon …
-    expect(coords[0]).toHaveLength(2) // … with one merged hole
+    // one fog polygon per game area: Moscow with one merged hole, Zavidovo untouched
+    expect(coords).toHaveLength(2)
+    expect(coords[0]).toHaveLength(2)
+    expect(coords[1]).toEqual([[[36.48, 56.57], [36.58, 56.57], [36.58, 56.62], [36.48, 56.62], [36.48, 56.57]]])
     // no tint over explored land when the fog is on
     expect(map.of(FakeFeature).some((x) => x.props.id === 'explored')).toBe(false)
     // tapping the fog selects nothing (footprints under it cannot be opened)

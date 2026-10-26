@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import StateBlock from '@/components/ui/StateBlock.vue'
 import { useMemoriesStore } from '@/stores/memories'
 import type { Memory } from '@/types/game'
@@ -7,6 +8,7 @@ import MemoryEditor from './MemoryEditor.vue'
 import MemorySticker from './MemorySticker.vue'
 
 const memories = useMemoriesStore()
+const router = useRouter()
 const editing = ref<Memory | null>(null)
 const dateFmt = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
 
@@ -16,7 +18,8 @@ onMounted(() => void memories.load())
 <template>
   <main class="page">
     <header class="head">
-      <RouterLink to="/collection" class="back" aria-label="Назад к коллекции">‹</RouterLink>
+      <!-- opened from the diary, the profile or the collection: back goes where the player came from -->
+      <button class="back" aria-label="Назад" @click="router.back()">‹</button>
       <h1 class="page-title">Альбом</h1>
     </header>
     <div class="filters" role="group" aria-label="Фильтр">
@@ -80,6 +83,8 @@ onMounted(() => void memories.load())
   color: var(--c-text-2);
   text-decoration: none;
   padding: 0 6px;
+  border: 0;
+  background: none;
 }
 .filters {
   display: flex;
