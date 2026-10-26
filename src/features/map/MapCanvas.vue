@@ -3,7 +3,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { services } from '@/app/providers/services'
 import type { Cell } from '@/services/exploration/grid'
 import type { GeoFix } from '@/services/geolocation/types'
-import type { MapScene, MapService, MapTarget, MapViewport } from '@/services/map/types'
+import type { LngLatPair, MapScene, MapService, MapTarget, MapViewport } from '@/services/map/types'
 import type { BuildingOutline, DistrictOverview, MapBuilding } from '@/types/game'
 import { bounds, MOSCOW_BOUNDS } from '@/utils/mapGeometry'
 
@@ -21,6 +21,8 @@ const props = defineProps<{
   recentCells: readonly Cell[]
   /** Fog of War over unexplored land */
   fog: boolean
+  /** walking route line to a place; null = none */
+  route: readonly LngLatPair[] | null
   /** px covered by overlays (header, tab bar) so fitting keeps content visible */
   padding: { top: number; bottom: number }
 }>()
@@ -31,6 +33,8 @@ const emit = defineEmits<{
   selectDistrict: [id: string | null]
   selectOutline: [id: number | null]
   error: [message: string]
+  /** the basemap is up and showing the city: fitting works from now on */
+  ready: []
 }>()
 
 const container = ref<HTMLDivElement | null>(null)
@@ -54,6 +58,7 @@ function scene(): MapScene {
     exploredCells: props.exploredCells,
     recentCells: props.recentCells,
     fog: props.fog,
+    route: props.route,
   }
 }
 
@@ -83,6 +88,7 @@ async function mount(): Promise<void> {
     if (map !== instance) return
     instance.render(scene())
     showCity(false)
+    emit('ready')
   } catch (e) {
     if (map !== instance) return
     failed.value = true
@@ -114,6 +120,7 @@ watch(
       props.exploredCells,
       props.recentCells,
       props.fog,
+      props.route,
     ] as const,
   () => map?.render(scene()),
 )
@@ -273,6 +280,17 @@ defineExpose({ flyTo, fitDistrict, showCity, fitArea })
   transform: translate(-50%, -50%);
   background: var(--c-accent);
   border: 3px solid #fff;
+  box-shadow: 0 1px 6px rgb(23 61 102 / 30%);
+  pointer-events: none;
+}
+
+:deep(.metka-route-end) {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border: 5px solid var(--c-button);
   box-shadow: 0 1px 6px rgb(23 61 102 / 30%);
   pointer-events: none;
 }

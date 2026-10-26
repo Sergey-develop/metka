@@ -126,6 +126,7 @@ function scene(over: Partial<MapScene> = {}): MapScene {
     exploredCells: [],
     recentCells: [],
     fog: false,
+    route: null,
     ...over,
   }
 }
@@ -487,6 +488,23 @@ describe('YandexMapService', () => {
     expect(map.of(FakeMarker).some((m) => m.element.className === 'metka-me')).toBe(true)
     service.render(scene({ position: null }))
     expect(map.of(FakeMarker).some((m) => m.element.className === 'metka-me')).toBe(false)
+  })
+
+  it('draws the walking route above the fog with a destination pin; a new array updates it, null removes it', async () => {
+    const { service, map } = await mounted()
+    const routeLine = () => map.of(FakeFeature).find((f) => f.props.id === 'route')
+    const endPin = () => map.of(FakeMarker).find((m) => m.element.className === 'metka-route-end')
+    service.render(scene({ fog: true, route: [[37.62, 55.655], [37.621, 55.656], [37.622, 55.657]] }))
+    expect(routeLine()?.props.source).toBe('metka-top')
+    expect((routeLine()?.props.geometry as { type: string }).type).toBe('LineString')
+    expect(endPin()?.props.coordinates).toEqual([37.622, 55.657])
+    const line = routeLine()
+    service.render(scene({ fog: true, route: [[37.62, 55.655], [37.623, 55.658]] }))
+    expect(routeLine()).toBe(line)
+    expect(endPin()?.props.coordinates).toEqual([37.623, 55.658])
+    service.render(scene({ fog: true, route: null }))
+    expect(routeLine()).toBeUndefined()
+    expect(endPin()).toBeUndefined()
   })
 
   it('converts GeoJSON geometry to Yandex [lng, lat] tuples', () => {

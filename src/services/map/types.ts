@@ -43,6 +43,8 @@ export interface MapScene {
   recentCells: readonly Cell[]
   /** Fog of War: hide unexplored land at street level (exploredCells are the holes) */
   fog: boolean
+  /** walking route to a place (above the fog); null = none. A new array means a new line. */
+  route: readonly LngLatPair[] | null
 }
 
 /**

@@ -16,6 +16,7 @@ import { useMemoriesStore } from '@/stores/memories'
 import { useMapStore } from '@/stores/map'
 import { useOutlinesStore } from '@/stores/outlines'
 import { useProfileStore } from '@/stores/profile'
+import { useRouteStore } from '@/stores/route'
 import { useTasksStore } from '@/stores/tasks'
 import type { ExplorationStatus } from '@/services/exploration/explorationTracker'
 import { DEFAULT_FILTER } from '@/services/exploration/trackFilter'
@@ -28,9 +29,11 @@ import DistrictCard from './DistrictCard.vue'
 import ExplorationDiagnostics from './ExplorationDiagnostics.vue'
 import MapCanvas from './MapCanvas.vue'
 import OutlineCard from './OutlineCard.vue'
+import RouteCard from './RouteCard.vue'
 import TasksSheet from './TasksSheet.vue'
 import MemoryEditor from '@/features/album/MemoryEditor.vue'
 import { GAME_AREAS, gameAreaAt, type GameAreaId } from '@/utils/gameAreas'
+import { usePlaces } from '@/features/locations/places'
 
 const map = useMapStore()
 const outlines = useOutlinesStore()
@@ -41,6 +44,13 @@ const memoryFor = ref<MapBuilding | null>(null)
 const profile = useProfileStore()
 const clan = useClanStore()
 const tasks = useTasksStore()
+const route = useRouteStore()
+/** a card fills the bottom of the map: the clan and tasks buttons step aside */
+const cardOpen = computed(() => !!(map.selectedBuilding || map.selectedDistrict || outlines.selected))
+/** the route card (mockup «карта с меткой») keeps the clan and tasks buttons, lifted above it */
+const routeCard = computed(() => route.active && !cardOpen.value && !(diagnosticsOpen.value && exploration.enabled))
+/** photo of the destination: own memory or scan first, as on the locations pages */
+const { photo: placePhoto } = usePlaces()
 /** the clan / tasks sheets over the map (mockups «выдвигается клан», «выдвигаются задания») */
 const sheet = ref<'clan' | 'tasks' | null>(null)
 const router = useRouter()
@@ -98,7 +108,7 @@ const diagnosticsOpen = ref(false)
 const fogHint = computed(() => {
   const v = viewport.value
   if (!fogOn.value || !v || v.zoom < STREET_LEVEL_ZOOM || exploration.loadingViewport) return false
-  if (map.selectedBuilding || map.selectedDistrict || outlines.selected || diagnosticsOpen.value) return false
+  if (cardOpen.value || route.active || diagnosticsOpen.value) return false
   return !exploration.anyExploredIn(v.bbox)
 })
 /** the other game area to jump to: Zavidovo is ~100 km away and empty from afar (no okrugs, no basemap) */
@@ -220,6 +230,23 @@ function openScanner(): void {
   if (map.selectedBuildingId) void router.push({ name: 'scan', params: { buildingId: map.selectedBuildingId } })
 }
 
+/** the first line to each new destination is fitted into view; rebuilds on the way are not */
+const mapReady = ref(false)
+let fittedGeneration = 0
+function fitRoute(): void {
+  const next = route.route
+  if (!mapReady.value || !next || fittedGeneration === route.generation) return
+  fittedGeneration = route.generation
+  const lngs = next.path.map(([lng]) => lng)
+  const lats = next.path.map(([, lat]) => lat)
+  canvas.value?.fitArea([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], 17)
+}
+watch(() => route.route, fitRoute)
+function onMapReady(): void {
+  mapReady.value = true
+  fitRoute()
+}
+
 function retry(): void {
   map.invalidate()
   outlines.invalidate()
@@ -282,12 +309,14 @@ onBeforeUnmount(() => {
       :explored-cells="exploration.cellList"
       :recent-cells="exploration.recentList"
       :fog="fogOn"
+      :route="route.route?.path ?? null"
       :padding="{ top: headerHeight, bottom: 110 }"
       @viewport="onViewport"
       @select-building="selectBuilding"
       @select-district="selectDistrict"
       @select-outline="selectOutline"
       @error="mapError = $event"
+      @ready="onMapReady"
     />
 
     <header ref="header" class="top">
@@ -324,12 +353,12 @@ onBeforeUnmount(() => {
       />
     </Transition>
 
-    <template v-if="!map.selectedBuilding && !map.selectedDistrict && !outlines.selected">
-      <button class="sheet-btn sheet-btn--clan" aria-label="Клан" @click="sheet = 'clan'">
+    <template v-if="!cardOpen">
+      <button class="sheet-btn sheet-btn--clan" :class="{ 'sheet-btn--raised': routeCard }" aria-label="Клан" @click="sheet = 'clan'">
         <ClanAvatar v-if="clan.membership" :url="clan.membership.clan.avatarUrl" :tag="clan.membership.clan.tag" :size="44" />
         <AppIcon v-else name="shield" :size="26" />
       </button>
-      <button class="sheet-btn sheet-btn--tasks" :aria-label="tasks.ready ? `Задания: наград к получению — ${tasks.ready}` : 'Задания'" @click="sheet = 'tasks'">
+      <button class="sheet-btn sheet-btn--tasks" :class="{ 'sheet-btn--raised': routeCard }" :aria-label="tasks.ready ? `Задания: наград к получению — ${tasks.ready}` : 'Задания'" @click="sheet = 'tasks'">
         <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
           <path
             fill="currentColor"
@@ -343,7 +372,7 @@ onBeforeUnmount(() => {
     <div class="bottom">
       <div
         class="chips chips--bottom"
-        :class="{ 'chips--beside-buttons': !map.selectedBuilding && !map.selectedDistrict && !outlines.selected }"
+        :class="{ 'chips--beside-buttons': !cardOpen }"
         aria-live="polite"
       >
         <div v-if="fogHint" class="chip chip--hint" role="status">
@@ -374,7 +403,7 @@ onBeforeUnmount(() => {
           {{ exploreChip.text }}
         </button>
         <button
-          v-if="otherArea && !map.selectedBuilding && !map.selectedDistrict && !outlines.selected"
+          v-if="otherArea && !cardOpen"
           type="button"
           class="chip"
           @click="goToArea(otherArea.id)"
@@ -404,6 +433,17 @@ onBeforeUnmount(() => {
         @publish="publishOutline"
       />
       <DistrictCard v-else-if="map.selectedDistrict" :district="map.selectedDistrict" @close="selectDistrict(null)" />
+      <RouteCard
+        v-else-if="route.target"
+        :place="route.target"
+        :photo="placePhoto(route.target)"
+        :route="route.route"
+        :state="route.state"
+        :error-code="route.errorCode"
+        :no-location="!map.position && !!map.geoError"
+        @open="router.push(`/locations/${route.target.id}`)"
+        @retry="route.retry()"
+      />
     </div>
 
     <Transition name="sheet">
@@ -586,6 +626,10 @@ onBeforeUnmount(() => {
 .sheet-btn--tasks {
   right: 16px;
   bottom: calc(var(--nav-height) + var(--safe-bottom) + 38px);
+}
+.sheet-btn--raised {
+  // the route card: 105 high, 16 above the tab bar, the buttons 10 above it (mockup)
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + 16px + 105px + 10px);
 }
 .sheet-btn__badge {
   position: absolute;

@@ -110,6 +110,11 @@ export function installFakeServices(): FakeServices {
     createMap: () => {
       throw new Error('map is not available in unit tests')
     },
+    routing: {
+      walking: vi.fn(async () => {
+        throw new Error('override routing.walking in the test')
+      }),
+    },
     memories: {
       list: vi.fn(async () => []),
       save: vi.fn(),

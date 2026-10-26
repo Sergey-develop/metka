@@ -31,6 +31,8 @@ export const MAP_COLORS = {
   unavailable: '#B9BCC8',
   /** Fog of War over unexplored land */
   fog: '#D9DCE6',
+  /** walking route line (the button blue) */
+  route: '#0189FF',
 } as const
 
 const NO_CELLS: readonly Cell[] = []
@@ -263,6 +265,7 @@ export class YandexMapService implements MapService {
   private readonly districtLabels = new Map<string, YMapMarker>()
   private percentPin: { marker: YMapMarker; key: string } | null = null
   private me: { dot: YMapMarker; halo: YMapFeature } | null = null
+  private routeLine: { line: YMapFeature; end: YMapMarker; path: readonly LngLatPair[] } | null = null
   private explored: { feature: YMapFeature; cells: readonly Cell[] } | null = null
   private recent: { feature: YMapFeature; cells: readonly Cell[] } | null = null
   private fog: { feature: YMapFeature; feather: YMapFeature; featherZoom: number; cells: readonly Cell[]; explored: Set<string> } | null = null
@@ -356,6 +359,7 @@ export class YandexMapService implements MapService {
     this.renderExplored(scene)
     this.renderRecent(scene)
     this.renderFog(scene)
+    this.renderRoute(scene)
   }
 
   destroy(): void {
@@ -372,6 +376,7 @@ export class YandexMapService implements MapService {
     this.districtLabels.clear()
     this.percentPin = null
     this.me = null
+    this.routeLine = null
     this.explored = null
     this.recent = null
     this.fog = null
@@ -723,6 +728,46 @@ export class YandexMapService implements MapService {
     })
     this.map!.addChild(feature)
     this.recent = { feature, cells }
+  }
+
+  /** the walking route: above the fog like the player, with a pin at the destination */
+  private renderRoute(scene: MapScene): void {
+    const path = scene.route
+    if (this.routeLine?.path === path) return
+    if (!path || path.length < 2) {
+      if (this.routeLine) {
+        this.map!.removeChild(this.routeLine.line)
+        this.map!.removeChild(this.routeLine.end)
+        this.routeLine = null
+      }
+      return
+    }
+    const geometry = { type: 'LineString' as const, coordinates: path.map(([lng, lat]): LngLat => [lng, lat]) }
+    const endAt = geometry.coordinates[geometry.coordinates.length - 1]!
+    if (this.routeLine) {
+      this.routeLine.line.update({ geometry })
+      this.routeLine.end.update({ coordinates: endAt })
+      this.routeLine.path = path
+      return
+    }
+    const api = this.api!
+    const line = new api.YMapFeature({
+      id: 'route',
+      source: TOP_SOURCE,
+      geometry,
+      style: {
+        zIndex: 45,
+        stroke: [
+          { color: MAP_COLORS.route, width: 6, opacity: 0.9 },
+          { color: '#FFFFFF', width: 9, opacity: 0.9 },
+        ],
+        interactive: false,
+      },
+    })
+    const end = new api.YMapMarker({ coordinates: endAt, zIndex: 150, source: TOP_MARKERS_SOURCE }, element('metka-route-end'))
+    this.map!.addChild(line)
+    this.map!.addChild(end)
+    this.routeLine = { line, end, path }
   }
 
   private renderPosition(scene: MapScene): void {

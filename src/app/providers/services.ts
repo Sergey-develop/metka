@@ -10,6 +10,8 @@ import type { CameraService } from '@/services/camera/types'
 import { WebCameraService } from '@/services/camera/webCamera'
 import { CapacitorGeolocationService } from '@/services/geolocation/capacitorGeolocation'
 import type { GeolocationService } from '@/services/geolocation/types'
+import { OsrmRoutingService } from '@/services/routing/osrmRouting'
+import type { RoutingService } from '@/services/routing/types'
 import { CapacitorAppLifecycle, type AppLifecycleService } from '@/services/lifecycle/appLifecycle'
 import { BrowserScreenWakeLock, type ScreenWakeLock } from '@/services/lifecycle/wakeLock'
 import { GpsExplorationTracker, type ExplorationTracker } from '@/services/exploration/explorationTracker'
@@ -43,6 +45,8 @@ export interface AppServices {
   wakeLock: ScreenWakeLock
   /** a fresh map engine instance per map screen (ADR-003: Yandex JS API 3.0) */
   createMap: () => MapService
+  /** walking routes drawn on our map */
+  routing: RoutingService
   /** album of memories (private photos in Storage) */
   memories: MemoriesService
   /** GPS tracking for explored territory (foreground only) */
@@ -81,6 +85,7 @@ export async function createServices(config: AppConfig): Promise<AppServices> {
     wakeLock: new BrowserScreenWakeLock(),
     memories: new SupabaseMemoriesService(supabase, prepareMemoryPhoto),
     createMap: () => new YandexMapService(() => loadYandexMaps(config.yandexMapsApiKey)),
+    routing: new OsrmRoutingService(),
     cameraPreview: new MediaDevicesCameraPreview(),
     orientation: new DeviceOrientationService(),
   }

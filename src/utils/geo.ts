@@ -23,3 +23,11 @@ export function formatDistance(meters: number): string {
   if (meters < 1000) return `${Math.round(meters)} м`
   return `${(meters / 1000).toFixed(meters < 10_000 ? 1 : 0).replace('.', ',')} км`
 }
+
+/** walking time as on the mockups: «до 5 мин», «15–20 мин» */
+export function walkRange(seconds: number): string {
+  const minutes = seconds / 60
+  if (minutes <= 5) return 'до 5 мин'
+  const hi = Math.ceil(minutes / 5) * 5
+  return `${hi - 5}–${hi} мин`
+}

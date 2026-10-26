@@ -7,6 +7,7 @@ import { useClanStore } from '@/stores/clan'
 import { useEventsStore } from '@/stores/events'
 import { useCollectionStore } from '@/stores/collection'
 import { useMapStore } from '@/stores/map'
+import { useRouteStore } from '@/stores/route'
 import { useExplorationStore } from '@/stores/exploration'
 import { useMemoriesStore } from '@/stores/memories'
 import { useOutlinesStore } from '@/stores/outlines'
@@ -35,6 +36,7 @@ watch(
       // signed out or session expired: drop all per-user state
       profile.reset()
       useMapStore().reset()
+      useRouteStore().stop()
       useOutlinesStore().reset()
       useMemoriesStore().reset()
       void useExplorationStore().reset()

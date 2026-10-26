@@ -6,6 +6,7 @@ import CoinIcon from '@/components/ui/CoinIcon.vue'
 import FilledIcon from '@/components/ui/FilledIcon.vue'
 import StateBlock from '@/components/ui/StateBlock.vue'
 import { useMapStore } from '@/stores/map'
+import { useRouteStore } from '@/stores/route'
 import type { MapBuilding, Rarity } from '@/types/game'
 import { distanceMeters, formatDistance } from '@/utils/geo'
 import { usePlaces, walkTime } from './places'
@@ -14,6 +15,7 @@ const props = defineProps<{ id: string }>()
 
 const router = useRouter()
 const map = useMapStore()
+const route = useRouteStore()
 const { buildings, loading, error, load, loadAll, distance, photo, isFavorite, favBusy, toggleFavorite } = usePlaces()
 
 const RARITY: Record<Rarity, string> = { common: 'Обычное', rare: 'Редкое', epic: 'Эпическое', legendary: 'Легендарное' }
@@ -84,6 +86,13 @@ async function share(b: MapBuilding): Promise<void> {
   } catch {
     // cancelled by the user or not allowed: nothing to report
   }
+}
+
+/** walking route on our map; the map card follows it and the line refreshes on the way */
+function buildRoute(b: MapBuilding): void {
+  map.select(null)
+  route.start(b)
+  void router.push('/map')
 }
 
 function openOnMap(b: MapBuilding): void {
@@ -193,7 +202,8 @@ onMounted(loadAll)
         </section>
 
         <div class="ld__cta">
-          <button class="ld__primary" @click="openOnMap(building)">Показать на карте</button>
+          <button v-if="route.target?.id === building.id" class="ld__primary" @click="route.stop()">Завершить маршрут</button>
+          <button v-else class="ld__primary" @click="buildRoute(building)">Построить маршрут</button>
           <RouterLink v-if="!building.discoveredAt" :to="`/scan/${building.id}`" class="ld__scan" aria-label="Сканировать здание">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
               <path d="M4 8V6.5A2.5 2.5 0 0 1 6.5 4H8M16 4h1.5A2.5 2.5 0 0 1 20 6.5V8M20 16v1.5a2.5 2.5 0 0 1-2.5 2.5H16M8 20H6.5A2.5 2.5 0 0 1 4 17.5V16M4 12h16" />

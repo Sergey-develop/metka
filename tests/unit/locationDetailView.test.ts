@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import LocationDetailView from '@/features/locations/LocationDetailView.vue'
 import { services } from '@/app/providers/services'
 import { useMapStore } from '@/stores/map'
+import { useRouteStore } from '@/stores/route'
 import { BUILDING, installFakeServices } from './helpers'
 
 const NEAR = { ...BUILDING, id: 'near', name: 'Большой театр', lat: BUILDING.lat + 0.004, discoveredAt: null }
@@ -84,9 +85,32 @@ describe('LocationDetailView', () => {
     expect(w.find('.ld__scan').attributes('href')).toBe('/scan/near')
   })
 
+  it('builds the route on our map', async () => {
+    const { w, router } = await mountView()
+    useMapStore().select('near')
+    const link = w.find('.ld__primary')
+    expect(link.text()).toBe('Построить маршрут')
+    await link.trigger('click')
+    await flushPromises()
+    expect(useRouteStore().target?.id).toBe(BUILDING.id)
+    // the place card would hide the route card
+    expect(useMapStore().selectedBuildingId).toBeNull()
+    expect(router.currentRoute.value.path).toBe('/map')
+  })
+
+  it('ends the route to this place instead of building it again', async () => {
+    useRouteStore().start({ ...BUILDING })
+    const { w } = await mountView()
+    const button = w.find('.ld__primary')
+    expect(button.text()).toBe('Завершить маршрут')
+    await button.trigger('click')
+    expect(useRouteStore().active).toBe(false)
+    expect(w.find('.ld__primary').text()).toBe('Построить маршрут')
+  })
+
   it('opens the place on the map', async () => {
     const { w, router } = await mountView()
-    await w.find('.ld__primary').trigger('click')
+    await w.find('.ld__chev').trigger('click')
     await flushPromises()
     expect(useMapStore().selectedBuildingId).toBe(BUILDING.id)
     expect(router.currentRoute.value.path).toBe('/map')

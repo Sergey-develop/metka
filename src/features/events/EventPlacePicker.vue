@@ -41,6 +41,7 @@ onMounted(async () => {
       exploredCells: [],
       recentCells: [],
       fog: false,
+      route: null,
     })
   } catch {
     if (map === instance) failed.value = true
