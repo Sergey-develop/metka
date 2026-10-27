@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { services } from '@/app/providers/services'
 import PlaceDetailView from '@/features/routes/PlaceDetailView.vue'
+import { photoCredit, placePhoto } from '@/features/routes/photos'
 import RoutesView from '@/features/routes/RoutesView.vue'
 import { pickWalk } from '@/features/routes/random'
 import { useMapStore } from '@/stores/map'
@@ -156,5 +157,16 @@ describe('RoutesView extras', () => {
     const bay = await mountAt('/places/zav-bay', PlaceDetailView, { id: 'zav-bay' })
     expect(bay.find('.pd__cover').exists()).toBe(true)
     expect(bay.find('.pd__credit').exists()).toBe(false)
+  })
+
+  it('the places that had no photo get one: a typical Commons photo with its credit, the residences share the Radisson one', () => {
+    const ids = ['barhan', 'basketball', 'evrika', 'fishing', 'football', 'gastrobar', 'spa-village', 'syrzavod', 'tennis', 'tent', 'toboggan', 'traktir', 'tsarevna', 'zhukovka']
+    for (const id of ids.map((s) => `zav-${s}`)) {
+      expect(placePhoto(place(id, 0, 0, [])), id).not.toBeNull()
+      expect(photoCredit(place(id, 0, 0, []))?.example, id).toBe(true)
+    }
+    const residences = place('zav-radisson-residences', 0, 0, [])
+    expect(placePhoto(residences)).toBe(placePhoto(place('zav-radisson', 0, 0, [])))
+    expect(photoCredit(residences)).toBeNull()
   })
 })

@@ -195,7 +195,11 @@ describe('RoutesView', () => {
     expect(w.findAll('.pl__item')).toHaveLength(3)
     expect(w.findAll('.pl__go')).toHaveLength(2)
     expect(w.text()).toContain('Точка уточняется')
-    expect(w.findAll('.pl__photo').map((i) => i.attributes('src'))).toEqual([expect.stringContaining('zav-bay')])
+    // «Меридиан» has no photo
+    expect(w.findAll('.pl__photo').map((i) => i.attributes('src'))).toEqual([
+      expect.stringContaining('zav-bay'),
+      expect.stringContaining('zav-traktir'),
+    ])
     await w.findAll('.zr__tabs button')[2]!.trigger('click')
     expect(w.find('.zr__count').text()).toBe('Собрано 0 из 1')
   })

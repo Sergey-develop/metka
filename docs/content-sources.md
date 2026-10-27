@@ -66,5 +66,19 @@ Wikimedia Commons (подпись автора показывается на с�
 | `zav-memorial` | Братская могила в Вараксино — это самое место | Kohomologie | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:Братская_могила_Вараксино_общий_вид_01.jpg |
 | `zav-minigolf` | мини-гольф, **фото для примера** (Германия) | Wolf1949H | CC0 | https://commons.wikimedia.org/wiki/File:Horner_Rennbahn_Minigolfanlage_2026.JPG |
 | `zav-alpaca` | альпаки, **фото для примера** | AnRo0002 | CC0 | https://commons.wikimedia.org/wiki/File:20170619Vicugna_pacos1.jpg |
+| `zav-barhan` | кафе в юрте, **фото для примера** (Красноярск) | Vyacheslav Argenberg | CC BY 4.0 | https://commons.wikimedia.org/wiki/File:Krasnoyarsk,_Yurt_interior,_Cafe,_Tea_house,_Russia.jpg |
+| `zav-basketball` | уличная баскетбольная площадка, **фото для примера** | Mertbiol | CC0 | https://commons.wikimedia.org/wiki/File:Outdoor_basketball_court,_Hurst_Park,_Molesey,_Surrey_02.jpg |
+| `zav-evrika` | детская мастерская, **фото для примера** | Max Kuznetsov, Inna Ismailova | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:Reality_Fairytale_of_the_Horse_and_the_Deer_children_craft_workshop_at_folk_fair_in_Berendeyevo_2013.jpg |
+| `zav-fishing` | рыбак у пруда, **фото для примера** | Дмитрий Скляренко | CC BY 3.0 | https://commons.wikimedia.org/wiki/File:Клевое_место_-_panoramio.jpg |
+| `zav-football` | травяное футбольное поле, **фото для примера** | Wpcpey | CC BY 4.0 | https://commons.wikimedia.org/wiki/File:Kwu_Tung_Grass_Pitch_201708.jpg |
+| `zav-gastrobar` | зал бара, **фото для примера** | BrokenSphere | CC BY-SA 3.0 | https://commons.wikimedia.org/wiki/File:Elephant_Bar,_Serramonte_interior_2.JPG |
+| `zav-spa-village` | домик на берегу озера, **фото для примера** | Tevfik Teker | CC BY 3.0 | https://commons.wikimedia.org/wiki/File:Lake_Inari_-_panoramio_(10).jpg |
+| `zav-syrzavod` | сырный погреб, **фото для примера** | Martin Thurnherr | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:Obere_Bundalp_BE_Käsekeller_01.jpg |
+| `zav-tennis` | грунтовые теннисные корты, **фото для примера** | Seyhan668 | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:AEC_Outdoor_Tennis_Courts.png |
+| `zav-tent` | шатры на лужайке, **фото для примера** | Acabashi | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:Easton_Lodge_Gardens_Tudor_Open_Day_Little_Easton_Essex_England.jpg |
+| `zav-toboggan` | трасса для тюбинга, **фото для примера** | Seemannsheide | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:Z_MrSnow_Tubing_MariaAlm_xs.jpg |
+| `zav-traktir` | деревянный зал ресторана, **фото для примера** | Ninaras | CC BY 4.0 | https://commons.wikimedia.org/wiki/File:Interior_of_new_Espilä_restaurant.jpg |
+| `zav-tsarevna` | пельмени, **фото для примера** | Eugene Kim | CC BY 2.0 | https://commons.wikimedia.org/wiki/File:Pelmeni_Russian.jpg |
+| `zav-zhukovka` | терраса ресторана у озера, **фото для примера** | Alex Sirac | CC BY 4.0 | https://commons.wikimedia.org/wiki/File:Terrace_of_a_restaurant_on_the_sides_of_lake_Bled.jpg |
 
-Без фото (свободных снимков нет; нужны от курорта/партнёров или съёмка на месте): «Царевна», «Трактиръ», «СырЗавод», «Жуковка», «Гастробар by Simple», «БарХан», «Эврика», Zavidovo SPA Village, Radisson Residences, Шатёр, теннисный корт, баскетбольная и футбольная площадки, санная трасса, рыболовный клуб.
+Radisson Residences показываются с фото владельца `zav-radisson` (тот же комплекс, `SAME_AS` в `photos.ts`). Фото «для примера» — не эти места; настоящие снимки ресторанов, площадок и SPA Village нужны от курорта/партнёров или со съёмки на месте.
