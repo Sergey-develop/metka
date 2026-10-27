@@ -36,6 +36,10 @@ jobs:
         env:
           CAP_SERVER_URL: ${{ vars.CAP_SERVER_URL }}
 
+      # the address the app opens (a wrong one = a black screen on the phone); capacitor.config.ts checks it
+      - name: Show the app's site address
+        run: node -e "const c=require('./ios/App/App/capacitor.config.json'); console.log('App opens:', c.server && c.server.url || 'the bundled build (CAP_SERVER_URL is not set)')"
+
       - name: Show Xcode version
         run: xcodebuild -version
 

@@ -6,7 +6,27 @@ import type { CapacitorConfig } from '@capacitor/cli'
  * bundled app (capacitor://localhost) does not satisfy; the site's own domain does. Native plugins
  * (geolocation, camera, app lifecycle) keep working through the Capacitor bridge. Unset → bundle.
  */
-const serverUrl = process.env.CAP_SERVER_URL?.trim() || undefined
+const serverUrl = checkedServerUrl(process.env.CAP_SERVER_URL)
+
+/**
+ * A wrong address makes the iOS app open nothing at all (a black screen), with no error anywhere: the
+ * build stops instead. Needs https:// and a host; a missing trailing slash is added (GitHub Pages serves
+ * the app under /metka/).
+ */
+function checkedServerUrl(raw: string | undefined): string | undefined {
+  const value = raw?.trim()
+  if (!value) return undefined
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new Error(`CAP_SERVER_URL is not a URL: "${value}" (expected e.g. https://sergey-develop.github.io/metka/)`)
+  }
+  if (url.protocol !== 'https:' || !url.hostname || /[*\s]/.test(value)) {
+    throw new Error(`CAP_SERVER_URL must be a plain https:// address, got "${value}"`)
+  }
+  return url.href.endsWith('/') ? url.href : `${url.href}/`
+}
 
 const config: CapacitorConfig = {
   appId: 'app.metka.game',
