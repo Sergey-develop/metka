@@ -79,6 +79,10 @@ const routes: RouteRecordRaw[] = [
       { path: 'events/:id', name: 'event', component: () => import('@/features/events/EventDetailView.vue'), props: true },
       { path: 'locations', name: 'locations', component: () => import('@/features/locations/LocationsView.vue') },
       { path: 'locations/:id', name: 'location', component: () => import('@/features/locations/LocationDetailView.vue'), props: true },
+      // Zavidovo: quest routes, places and artifacts (migration 026)
+      { path: 'routes', name: 'routes', component: () => import('@/features/routes/RoutesView.vue') },
+      { path: 'places/:id', name: 'place', component: () => import('@/features/routes/PlaceDetailView.vue'), props: true },
+      { path: 'routes/:slug', name: 'route', component: () => import('@/features/routes/RouteDetailView.vue'), props: true },
       { path: 'collection', name: 'collection', component: () => import('@/features/collection/CollectionView.vue') },
       { path: 'album', name: 'album', component: () => import('@/features/album/AlbumView.vue') },
       // diary: the cover of the album (mockup дневник.png)

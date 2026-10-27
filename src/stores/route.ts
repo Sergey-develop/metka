@@ -20,6 +20,8 @@ export type RouteState = 'idle' | 'waiting_position' | 'loading' | 'ready' | 'ar
 export const useRouteStore = defineStore('route', () => {
   const map = useMapStore()
   const target = shallowRef<MapBuilding | null>(null)
+  /** where the route card leads back to; null — the place page of the target */
+  const returnTo = ref<string | null>(null)
   const route = shallowRef<WalkingRoute | null>(null)
   const state = ref<RouteState>('idle')
   const errorCode = ref<RoutingErrorCode | null>(null)
@@ -79,9 +81,10 @@ export const useRouteStore = defineStore('route', () => {
 
   watch(() => map.position, onFix)
 
-  function start(place: MapBuilding): void {
+  function start(place: MapBuilding, back: string | null = null): void {
     stop()
     target.value = place
+    returnTo.value = back
     generation.value++
     if (map.position) onFix(map.position)
     else state.value = 'waiting_position'
@@ -101,6 +104,7 @@ export const useRouteStore = defineStore('route', () => {
     controller?.abort()
     controller = null
     target.value = null
+    returnTo.value = null
     route.value = null
     state.value = 'idle'
     errorCode.value = null
@@ -108,5 +112,5 @@ export const useRouteStore = defineStore('route', () => {
     builtAt = 0
   }
 
-  return { target, route, state, errorCode, generation, active, start, retry, stop }
+  return { target, returnTo, route, state, errorCode, generation, active, start, retry, stop }
 })

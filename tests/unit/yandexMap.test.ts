@@ -361,7 +361,7 @@ describe('YandexMapService', () => {
     // one fog polygon per game area: Moscow with one merged hole, Zavidovo untouched
     expect(coords).toHaveLength(2)
     expect(coords[0]).toHaveLength(2)
-    expect(coords[1]).toEqual([[[36.48, 56.57], [36.58, 56.57], [36.58, 56.62], [36.48, 56.62], [36.48, 56.57]]])
+    expect(coords[1]).toEqual([[[36.48, 56.52], [36.58, 56.52], [36.58, 56.62], [36.48, 56.62], [36.48, 56.52]]])
     // no tint over explored land when the fog is on
     expect(map.of(FakeFeature).some((x) => x.props.id === 'explored')).toBe(false)
     // tapping the fog selects nothing (footprints under it cannot be opened)

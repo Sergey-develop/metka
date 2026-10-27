@@ -8,9 +8,16 @@ import type { CandidateMatcher, RecognitionCandidate } from '../recognition/type
 import {
   AVATAR_KEYS,
   EVENT_KINDS,
+  PLACE_TAGS,
+  PLACE_ZONES,
+  STEP_KINDS,
   STYLE_COLLECTIONS,
   TASK_KINDS,
   type AdminGameInfo,
+  type AreaPlace,
+  type AreaQuests,
+  type PlaceTag,
+  type ArtifactRef,
   type AvatarKey,
   type Bbox,
   type BuildingFacts,
@@ -43,6 +50,7 @@ import {
   type ScanDecision,
   type ScanRejectReason,
   type ScanSubmission,
+  type StepResult,
   type StyleCollections,
   type TasksState,
 } from '@/types/game'
@@ -954,6 +962,129 @@ export class GameApi implements CandidateMatcher {
         }),
       }
     })
+  }
+
+  async getAreaQuests(area: GameAreaId): Promise<AreaQuests> {
+    const o = obj(await withRetry(() => unwrap(this.client.rpc('area_quests', { p_area: area }))), 'area_quests')
+    const strings = (v: unknown, path: string): string[] =>
+      arr(v, path).map((x) => {
+        if (typeof x !== 'string') throw new ApiError('invalid_response', `${path}: expected string`)
+        return x
+      })
+    const artifact = (v: unknown, path: string): ArtifactRef | null => {
+      if (v === null || v === undefined) return null
+      const a = obj(v, path)
+      return { id: str(a, 'id'), title: str(a, 'title') }
+    }
+    const place = (v: unknown): AreaPlace => {
+      const p = obj(v, 'place')
+      return {
+        id: str(p, 'id'),
+        zone: oneOf(p, 'zone', PLACE_ZONES),
+        category: str(p, 'category'),
+        name: str(p, 'name'),
+        description: str(p, 'description'),
+        idea: strOrNull(p, 'idea'),
+        address: strOrNull(p, 'address'),
+        lat: numOrNull(p, 'lat'),
+        lng: numOrNull(p, 'lng'),
+        radiusM: num(p, 'radiusM'),
+        isPartner: bool(p, 'isPartner'),
+        needsCheck: bool(p, 'needsCheck'),
+        // before migration 027 there are no categories and contacts
+        tags: p.tags === undefined ? [] : strings(p.tags, 'tags').filter((x): x is PlaceTag => (PLACE_TAGS as readonly string[]).includes(x)),
+        openingHours: strOrNull(p, 'openingHours'),
+        phone: strOrNull(p, 'phone'),
+        website: strOrNull(p, 'website'),
+      }
+    }
+    return {
+      routes: arr(o.routes, 'routes').map((row) => {
+        const r = obj(row, 'route')
+        return {
+          id: str(r, 'id'),
+          slug: str(r, 'slug'),
+          title: str(r, 'title'),
+          questTitle: str(r, 'questTitle'),
+          description: str(r, 'description'),
+          duration: str(r, 'duration'),
+          audience: str(r, 'audience'),
+          categories: strings(r.categories, 'categories'),
+          note: strOrNull(r, 'note'),
+          finalTitle: str(r, 'finalTitle'),
+          finalText: str(r, 'finalText'),
+          rewardXp: num(r, 'rewardXp'),
+          rewardCoins: num(r, 'rewardCoins'),
+          artifact: artifact(r.artifact, 'route.artifact'),
+          completedAt: strOrNull(r, 'completedAt'),
+          steps: arr(r.steps, 'steps').map((item) => {
+            const s = obj(item, 'step')
+            return {
+              id: str(s, 'id'),
+              slug: str(s, 'slug'),
+              ord: num(s, 'ord'),
+              title: str(s, 'title'),
+              task: str(s, 'task'),
+              kind: oneOf(s, 'kind', STEP_KINDS),
+              question: strOrNull(s, 'question'),
+              options: s.options === null || s.options === undefined ? null : strings(s.options, 'options'),
+              safety: strOrNull(s, 'safety'),
+              rewardXp: num(s, 'rewardXp'),
+              artifact: artifact(s.artifact, 'step.artifact'),
+              place: s.place === null || s.place === undefined ? null : place(s.place),
+              doneAt: strOrNull(s, 'doneAt'),
+            }
+          }),
+        }
+      }),
+      places: arr(o.places, 'places').map(place),
+      collections: arr(o.collections, 'collections').map((row) => {
+        const c = obj(row, 'collection')
+        return {
+          id: str(c, 'id'),
+          title: str(c, 'title'),
+          items: arr(c.items, 'collection.items').map((item) => {
+            const a = obj(item, 'artifact')
+            return { id: str(a, 'id'), title: str(a, 'title'), how: str(a, 'how'), earnedAt: strOrNull(a, 'earnedAt') }
+          }),
+        }
+      }),
+    }
+  }
+
+  /** complete_route_step(): the server checks the position (steps with a place) and the answer (a quiz) */
+  async completeRouteStep(
+    stepId: string,
+    position: { lat: number; lng: number; accuracyM: number } | null,
+    answer: number | null,
+  ): Promise<StepResult> {
+    // not retried: after a lost response the next tap comes back as already_done
+    const o = obj(
+      await unwrap(
+        this.client.rpc('complete_route_step', {
+          p_step_id: stepId,
+          p_lat: position?.lat ?? null,
+          p_lng: position?.lng ?? null,
+          p_accuracy_m: position?.accuracyM ?? null,
+          p_answer: answer,
+        }),
+      ),
+      'complete_route_step',
+    )
+    const status = oneOf(o, 'status', ['done', 'already_done', 'too_far', 'wrong_answer'] as const)
+    if (status === 'too_far') return { status, distanceM: num(o, 'distanceM'), radiusM: num(o, 'radiusM') }
+    if (status !== 'done') return { status }
+    const reward = obj(o.reward, 'reward')
+    return {
+      status,
+      reward: { xp: num(reward, 'xp'), coins: num(reward, 'coins') },
+      artifacts: arr(o.artifacts, 'artifacts').map((v) => {
+        const a = obj(v, 'artifact')
+        return { id: str(a, 'id'), title: str(a, 'title') }
+      }),
+      routeCompleted: bool(o, 'routeCompleted'),
+      profile: parseProfileStats(o.profile),
+    }
   }
 
   /** claim_task(): idempotent on the server (one claim per task and period). Returns the new coin balance. */

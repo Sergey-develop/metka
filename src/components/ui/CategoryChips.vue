@@ -1,9 +1,11 @@
 <script lang="ts">
-export type ChipTone = 'sport' | 'culture' | 'kids' | 'free'
+export type ChipTone = 'sport' | 'culture' | 'kids' | 'free' | 'food' | 'rest'
+export type ChipIcon = 'runner' | 'cap' | 'people'
 export interface ChipItem {
   id: string
   label: string
   tone: ChipTone
+  icon?: ChipIcon
 }
 </script>
 
@@ -38,6 +40,13 @@ const CATEGORIES: { id: ChipTone; label: string; icon: 'runner' | 'cap' | 'peopl
       :aria-pressed="modelValue === c.id"
       @click="emit('update:modelValue', modelValue === c.id ? null : c.id)"
     >
+      <FilledIcon v-if="c.icon === 'runner'" name="runner" :size="18" />
+      <svg v-else-if="c.icon === 'cap'" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="currentColor" d="M11.5 4.2a1.2 1.2 0 0 1 1 0l9 4.2a.7.7 0 0 1 0 1.2l-9 4.3a1.2 1.2 0 0 1-1 0l-9-4.3a.7.7 0 0 1 0-1.2l9-4.2ZM6 12.6l5.5 2.6a1.2 1.2 0 0 0 1 0l5.5-2.6v3.6c0 1.6-2.7 3.3-6 3.3s-6-1.7-6-3.3v-3.6Z" />
+      </svg>
+      <svg v-else-if="c.icon === 'people'" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="currentColor" d="M9 4.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Zm7.5 2a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6ZM9 13c3.6 0 6 1.7 6 4v1.2c0 .5-.4.8-.8.8H3.8a.8.8 0 0 1-.8-.8V17c0-2.3 2.4-4 6-4Zm7.5.4c2.6.1 4.5 1.4 4.5 3.3v1.5c0 .4-.4.8-.8.8H16.6c.2-.3.4-.6.4-1V17c0-1.4-.5-2.6-1.5-3.6h1Z" />
+      </svg>
       {{ c.label }}
     </button>
   </div>
@@ -113,6 +122,14 @@ const CATEGORIES: { id: ChipTone; label: string; icon: 'runner' | 'cap' | 'peopl
   &--free {
     background: #fdcfcd;
     color: #301312;
+  }
+  &--food {
+    background: #ffe27e;
+    color: #2b2410;
+  }
+  &--rest {
+    background: #c9f0dc;
+    color: #0f2a1c;
   }
 }
 </style>

@@ -32,8 +32,10 @@ import OutlineCard from './OutlineCard.vue'
 import RouteCard from './RouteCard.vue'
 import TasksSheet from './TasksSheet.vue'
 import MemoryEditor from '@/features/album/MemoryEditor.vue'
-import { GAME_AREAS, gameAreaAt, type GameAreaId } from '@/utils/gameAreas'
+import { gameAreaAt, ZAVIDOVO_HOME, type GameAreaId } from '@/utils/gameAreas'
 import { usePlaces } from '@/features/locations/places'
+import { hasPoint, mapCategory, PLACE_CHIPS, placeTarget } from '@/features/routes/routes'
+import { useAreaQuestsStore } from '@/stores/areaQuests'
 
 const map = useMapStore()
 const outlines = useOutlinesStore()
@@ -123,8 +125,7 @@ function goToArea(id: GameAreaId): void {
     canvas.value?.showCity()
     return
   }
-  const [minLng, minLat, maxLng, maxLat] = GAME_AREAS.find((a) => a.id === id)!.bbox
-  canvas.value?.fitArea([[minLng, minLat], [maxLng, maxLat]], 14)
+  canvas.value?.flyTo(ZAVIDOVO_HOME.lng, ZAVIDOVO_HOME.lat, ZAVIDOVO_HOME.zoom)
 }
 const showExploredState = ref<'idle' | 'loading' | 'none' | 'error'>('idle')
 async function showExplored(): Promise<void> {
@@ -219,7 +220,58 @@ function selectDistrict(id: string | null): void {
   if (id) canvas.value?.fitDistrict(id)
 }
 
+const quests = useAreaQuestsStore()
+/** places of the Zavidovo quest steps drawn as map points; done when every step there is done */
+const questPoints = computed(() => {
+  const points = new Map<string, MapBuilding>()
+  for (const r of quests.routes) {
+    for (const s of r.steps) {
+      if (!hasPoint(s.place)) continue
+      const id = `place:${s.place.id}`
+      const known = points.get(id)
+      const doneAt = s.doneAt && (!known || known.discoveredAt) ? s.doneAt : null
+      points.set(id, { ...placeTarget(s.place), rarity: 'epic', discoveredAt: doneAt })
+    }
+  }
+  return [...points.values()]
+})
+/** a category chip shows only the places of that category (Zavidovo, migration 027) instead of everything else */
+const categoryPoints = computed(() => {
+  const tag = mapCategory.value
+  if (!tag) return []
+  return (quests.data?.places ?? [])
+    .filter((p) => p.tags.includes(tag))
+    .filter(hasPoint)
+    .map((p) => ({ ...placeTarget(p), rarity: 'epic' as const }))
+})
+const canvasBuildings = computed(() => {
+  if (mapCategory.value) return categoryPoints.value
+  return questPoints.value.length ? [...map.buildingList, ...questPoints.value] : map.buildingList
+})
+// the places are all in Zavidovo: a chip picked elsewhere takes the map there
+watch(mapCategory, (tag) => {
+  if (!tag) return
+  void quests.load()
+  map.select(null)
+  outlines.select(null)
+  const v = viewport.value
+  const here = v && gameAreaAt({ lng: (v.bbox.minLng + v.bbox.maxLng) / 2, lat: (v.bbox.minLat + v.bbox.maxLat) / 2 })
+  if (here !== 'zavidovo') canvas.value?.flyTo(ZAVIDOVO_HOME.lng, ZAVIDOVO_HOME.lat, ZAVIDOVO_HOME.zoom)
+})
+
 function selectBuilding(id: string): void {
+  if (id.startsWith('place:')) {
+    const placeId = id.slice('place:'.length)
+    // a category point opens the place, a quest point its route
+    if (mapCategory.value) {
+      void router.push({ name: 'place', params: { id: placeId } })
+      return
+    }
+    const r = quests.routes.find((x) => x.steps.some((s) => s.place?.id === placeId && !s.doneAt)) ??
+      quests.routes.find((x) => x.steps.some((s) => s.place?.id === placeId))
+    void router.push(r ? { name: 'route', params: { slug: r.slug } } : '/routes')
+    return
+  }
   outlines.select(null)
   map.select(id)
   const b = map.buildings.get(id)
@@ -256,6 +308,8 @@ function retry(): void {
 
 let resize: ResizeObserver | null = null
 onMounted(() => {
+  // the quest points of Zavidovo; a failure only leaves them off the map
+  void quests.load()
   services()
     .api.isAdmin()
     .then((v) => (isAdmin.value = v))
@@ -298,7 +352,7 @@ onBeforeUnmount(() => {
   <main class="map-view">
     <MapCanvas
       ref="canvas"
-      :buildings="map.buildingList"
+      :buildings="canvasBuildings"
       :districts="map.districts"
       :outlines="outlines.list"
       :buildings-with-outline="outlines.gameIdsWithOutline"
@@ -335,7 +389,7 @@ onBeforeUnmount(() => {
         <WalletStreak class="wallet" :coins="profile.profile?.coins ?? 0" :streak="streak" />
       </div>
 
-      <CategoryChips class="top__cats" />
+      <CategoryChips v-model="mapCategory" class="top__cats" :items="PLACE_CHIPS" />
 
       <div class="chips" aria-live="polite">
         <span v-if="map.geoError" class="chip chip--warn">{{ GEO_TEXT[map.geoError.code] }}</span>
@@ -441,7 +495,7 @@ onBeforeUnmount(() => {
         :state="route.state"
         :error-code="route.errorCode"
         :no-location="!map.position && !!map.geoError"
-        @open="router.push(`/locations/${route.target.id}`)"
+        @open="router.push(route.returnTo ?? `/locations/${route.target.id}`)"
         @retry="route.retry()"
       />
     </div>

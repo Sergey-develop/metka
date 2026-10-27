@@ -1,13 +1,20 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import MoscowMapCard from '@/features/profile/MoscowMapCard.vue'
-import { gameAreaAt } from '@/utils/gameAreas'
+import { gameAreaAt, ZAVIDOVO_HOME } from '@/utils/gameAreas'
 
 describe('gameAreaAt', () => {
   it('finds Moscow, Zavidovo or nothing', () => {
     expect(gameAreaAt({ lat: 55.7558, lng: 37.6173 })).toBe('moscow')
     expect(gameAreaAt({ lat: 56.595, lng: 36.52 })).toBe('zavidovo')
     expect(gameAreaAt({ lat: 59.93, lng: 30.31 })).toBeNull()
+  })
+
+  it('the Zavidovo chip lands inside the area, at street level, where the fog hint shows', () => {
+    expect(gameAreaAt(ZAVIDOVO_HOME)).toBe('zavidovo')
+    // the old village is in the area too
+    expect(gameAreaAt({ lat: 56.5297, lng: 36.5303 })).toBe('zavidovo')
+    expect(ZAVIDOVO_HOME.zoom).toBeGreaterThanOrEqual(15)
   })
 })
 

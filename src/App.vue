@@ -2,6 +2,8 @@
 import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import SplashScreen, { SPLASH_MS } from '@/components/ui/SplashScreen.vue'
+import { mapCategory } from '@/features/routes/routes'
+import { useAreaQuestsStore } from '@/stores/areaQuests'
 import { useAuthStore } from '@/stores/auth'
 import { useClanStore } from '@/stores/clan'
 import { useEventsStore } from '@/stores/events'
@@ -46,6 +48,8 @@ watch(
       useEventsStore().reset()
       useTasksStore().reset()
       useScanStore().reset()
+      useAreaQuestsStore().reset()
+      mapCategory.value = null
       void router.replace({ name: 'login' })
     }
   },

@@ -336,6 +336,98 @@ export interface LandmarkCollection {
   items: { id: string; name: string; marked: boolean }[]
 }
 
+export const PLACE_TAGS = ['sport', 'culture', 'kids', 'free', 'food', 'rest'] as const
+/** the map's category chips (migration 027) */
+export type PlaceTag = (typeof PLACE_TAGS)[number]
+
+export const PLACE_ZONES = ['bay', 'forest', 'village', 'resort'] as const
+export type PlaceZone = (typeof PLACE_ZONES)[number]
+
+/** area_places (migration 026): a place of a game area; lat/lng null — the point is not settled yet */
+export interface AreaPlace {
+  id: string
+  zone: PlaceZone
+  category: string
+  name: string
+  description: string
+  idea: string | null
+  address: string | null
+  lat: number | null
+  lng: number | null
+  radiusM: number
+  isPartner: boolean
+  /** the point is approximate and must be checked on site */
+  needsCheck: boolean
+  tags: PlaceTag[]
+  openingHours: string | null
+  phone: string | null
+  website: string | null
+}
+
+export const STEP_KINDS = ['checkin', 'photo', 'question'] as const
+export type StepKind = (typeof STEP_KINDS)[number]
+
+export interface ArtifactRef {
+  id: string
+  title: string
+}
+
+export interface RouteStep {
+  id: string
+  slug: string
+  ord: number
+  title: string
+  task: string
+  kind: StepKind
+  question: string | null
+  options: string[] | null
+  safety: string | null
+  rewardXp: number
+  artifact: ArtifactRef | null
+  /** null — the step needs no presence (a question about a place) */
+  place: AreaPlace | null
+  doneAt: string | null
+}
+
+export interface QuestRoute {
+  id: string
+  slug: string
+  title: string
+  questTitle: string
+  description: string
+  duration: string
+  audience: string
+  categories: string[]
+  note: string | null
+  finalTitle: string
+  finalText: string
+  rewardXp: number
+  rewardCoins: number
+  artifact: ArtifactRef | null
+  completedAt: string | null
+  steps: RouteStep[]
+}
+
+export interface ArtifactCollection {
+  id: string
+  title: string
+  items: { id: string; title: string; how: string; earnedAt: string | null }[]
+}
+
+/** area_quests() (migration 026) */
+export interface AreaQuests {
+  routes: QuestRoute[]
+  places: AreaPlace[]
+  collections: ArtifactCollection[]
+}
+
+/** complete_route_step() (migration 026) */
+export type StepResult =
+  | { status: 'done'; reward: { xp: number; coins: number }; artifacts: ArtifactRef[]; routeCompleted: boolean; profile: ProfileStats | null }
+  | { status: 'already_done' }
+  | { status: 'wrong_answer' }
+  | { status: 'too_far'; distanceM: number; radiusM: number }
+
 export const EVENT_KINDS = ['run', 'walk', 'reading', 'cleanup'] as const
 export type EventKind = (typeof EVENT_KINDS)[number]
 

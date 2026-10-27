@@ -178,12 +178,11 @@ onMounted(loadAll)
             </ul>
           </section>
 
-          <section class="routes" :style="{ backgroundImage: `url(${routesArt})` }">
+          <RouterLink to="/routes" class="routes" :style="{ backgroundImage: `url(${routesArt})` }">
             <h2>Авторские маршруты</h2>
-            <p>Готовые маршруты от краеведов,<br />архитекторов и блогеров,</p>
-            <!-- no routes backend yet: «скоро», as the time capsule and the book in the diary -->
-            <span class="routes__soon">Скоро</span>
-          </section>
+            <p>Квесты по Завидово: набережная,<br />«Ямской лес» и Государева дорога</p>
+            <span class="routes__soon">Открыть</span>
+          </RouterLink>
         </template>
       </div>
     </Transition>
@@ -496,7 +495,10 @@ $card: #f3f3f9;
 
 .routes {
   position: relative;
+  display: block;
   height: 154px;
+  color: inherit;
+  text-decoration: none;
   margin-top: 10px;
   padding: 14px 12px;
   border-radius: 12px;
