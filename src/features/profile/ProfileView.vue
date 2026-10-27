@@ -30,8 +30,8 @@ import AchievementSheet from './AchievementSheet.vue'
 import { badgeKind, sortAchievements } from './achievements'
 import MoscowMapCard from './MoscowMapCard.vue'
 import ProfileSettingsSheet from './ProfileSettingsSheet.vue'
-import artifactBadge from '@/assets/collections/rare.webp'
 import { useAreaQuestsStore } from '@/stores/areaQuests'
+import { collectionPhoto } from '@/features/routes/photos'
 
 /**
  * The player's own profile, or — with `userId` of someone else (opened from the clan screen) — that
@@ -209,32 +209,33 @@ const CLAN_FACES = 4
 const clanFaces = computed(() => members.value.slice(0, CLAN_FACES))
 
 const PLACEHOLDERS = 4
-const diaryPhotos = computed(() =>
-  memories.items.flatMap((m) => {
+/** «Фото и заметки из AR»: the memories' photos, then the player's own scan photos of other buildings */
+const diaryPhotos = computed(() => {
+  const fromMemories = memories.items.flatMap((m) => {
     const url = memories.photoOf(m.buildingId)
-    return url ? [{ id: m.id, url, name: m.buildingName }] : []
-  }),
-)
+    return url ? [{ id: m.id, url, name: m.buildingName, buildingId: m.buildingId }] : []
+  })
+  const withMemory = new Set(fromMemories.map((p) => p.buildingId))
+  const fromScans = collection.items.flatMap((i) => {
+    const url = i.photoPath ? collection.photoUrls.get(i.photoPath) : undefined
+    return url && !withMemory.has(i.buildingId) ? [{ id: `scan:${i.buildingId}`, url, name: i.name, buildingId: i.buildingId }] : []
+  })
+  return [...fromMemories, ...fromScans]
+})
 
-const RARITY_RANK: Record<Rarity, number> = { legendary: 0, epic: 1, rare: 2, common: 3 }
-/** artifacts earned in the Zavidovo quests, newest first: they lead «Лучшие находки» */
-const artifacts = computed(() =>
-  (areaQuests.data?.collections ?? [])
-    .flatMap((c) => c.items.filter((i) => i.earnedAt))
-    .sort((a, b) => Date.parse(b.earnedAt!) - Date.parse(a.earnedAt!))
-    .map((i) => ({ id: `artifact:${i.id}`, url: null, name: i.title, artifact: true })),
+/**
+ * «Коллекция и артефакты»: mine are the Zavidovo artifact collections — the same as on the tasks page and
+ * the collection page; another player's are their best finds (player_public_profile has no artifacts).
+ */
+const artifactCollections = computed(() =>
+  (areaQuests.data?.collections ?? []).map((c) => ({
+    id: c.id,
+    title: c.title,
+    url: collectionPhoto(c.id),
+    count: `${c.items.filter((i) => i.earnedAt).length}/${c.items.length}`,
+  })),
 )
-const bestFinds = computed(() =>
-  isOther.value
-    ? (other.value?.bestFinds ?? []).map((f) => ({ id: f.buildingId, url: f.imageUrl, name: f.name, artifact: false }))
-    : [
-        ...artifacts.value,
-        ...[...collection.items]
-          .sort((a, b) => RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity])
-          .slice(0, 8)
-          .map((item) => ({ id: item.buildingId, url: collection.imageOf(item), name: item.name, artifact: false })),
-      ],
-)
+const otherFinds = computed(() => (other.value?.bestFinds ?? []).map((f) => ({ id: f.buildingId, url: f.imageUrl, name: f.name })))
 
 function openFavorites(): void {
   memories.favoritesOnly = true
@@ -492,34 +493,35 @@ watch(
         <div class="block__head">
           <div>
             <h2>Коллекция и артефакты</h2>
-            <p class="block__sub">Лучшие находки</p>
+            <p class="block__sub">{{ isOther ? 'Лучшие находки' : 'Артефакты Завидово' }}</p>
           </div>
           <RouterLink v-if="!isOther" to="/collection" class="more" aria-label="Открыть коллекцию"><AppIcon name="chevron" :size="18" /></RouterLink>
         </div>
-        <div v-if="!isOther && !collection.loaded && collection.loading" class="strip" aria-label="Загружаем коллекцию">
+        <template v-if="isOther">
+          <p v-if="otherFinds.length === 0" class="empty empty--quiet">
+            <span class="empty__text"><small>Игрок пока ничего не открыл</small></span>
+          </p>
+          <div v-else class="strip">
+            <template v-for="f in otherFinds" :key="f.id">
+              <img v-if="f.url" class="strip__item" :src="f.url" :alt="f.name" />
+              <span v-else class="strip__item strip__item--name">{{ f.name }}</span>
+            </template>
+          </div>
+        </template>
+        <div v-else-if="!areaQuests.data" class="strip" aria-label="Загружаем коллекции">
           <span v-for="i in PLACEHOLDERS" :key="`cs${i}`" class="strip__item strip__item--skeleton" />
         </div>
-        <p v-else-if="bestFinds.length === 0 && isOther" class="empty empty--quiet">
-          <span class="empty__text"><small>Игрок пока ничего не открыл</small></span>
-        </p>
-        <RouterLink v-else-if="bestFinds.length === 0" to="/map" class="empty">
-          <span class="empty__icon" aria-hidden="true"><FilledIcon name="pin" :size="24" /></span>
-          <span class="empty__text">
-            <b>Пока ни одной находки</b>
-            <small>Открой первое здание на карте — лучшие появятся здесь</small>
-          </span>
-          <span class="empty__cta">На карту</span>
-        </RouterLink>
         <div v-else class="strip">
-          <template v-for="f in bestFinds" :key="f.id">
-            <span v-if="f.artifact" class="strip__item strip__item--artifact">
-              <img :src="artifactBadge" alt="" />
-              {{ f.name }}
-            </span>
-            <img v-else-if="f.url" class="strip__item" :src="f.url" :alt="f.name" />
-            <span v-else class="strip__item strip__item--name">{{ f.name }}</span>
-          </template>
-          <span v-for="i in Math.max(0, PLACEHOLDERS - bestFinds.length)" :key="`c${i}`" class="strip__item strip__item--slot" aria-hidden="true">+</span>
+          <RouterLink
+            v-for="c in artifactCollections"
+            :key="c.id"
+            to="/collection"
+            class="strip__item strip__item--coll"
+            :style="c.url ? { backgroundImage: `url(${c.url})` } : undefined"
+          >
+            <span class="strip__coll-name">«{{ c.title }}»</span>
+            <span class="strip__coll-count">{{ c.count }}</span>
+          </RouterLink>
         </div>
       </section>
 
@@ -970,6 +972,15 @@ $gray: #6d6d6e;
     display: none;
   }
 }
+.strip__coll-name {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 14px;
+}
+.strip__coll-count {
+  font-size: 11px;
+  opacity: 0.85;
+}
 .strip__item {
   flex: 0 0 88px;
   width: 88px;
@@ -999,23 +1010,26 @@ $gray: #6d6d6e;
     color: #fff;
     overflow: hidden;
   }
-  // an artifact of the Zavidovo quests: its badge and name on gold
-  &--artifact {
+  // an artifact collection: its cover, name and progress over a shade
+  &--coll {
+    position: relative;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
+    justify-content: flex-end;
+    gap: 2px;
     padding: 8px;
-    background: linear-gradient(160deg, #fff3c4, #ffd76a);
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 14px;
-    text-align: center;
-    color: #5a4300;
-    img {
-      width: 40px;
-      height: 40px;
+    overflow: hidden;
+    background: #2d7fd6 center / cover no-repeat;
+    color: #fff;
+    text-decoration: none;
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgb(0 0 0 / 0%) 35%, rgb(0 0 0 / 60%) 100%);
+    }
+    > * {
+      position: relative;
     }
   }
   // still loading: a soft shimmer

@@ -11,7 +11,6 @@ import {
   PLACE_TAGS,
   PLACE_ZONES,
   STEP_KINDS,
-  STYLE_COLLECTIONS,
   TASK_KINDS,
   type AdminGameInfo,
   type AreaPlace,
@@ -38,7 +37,6 @@ import {
   type EventDraft,
   type EventPerson,
   type GameEvent,
-  type LandmarkCollection,
   type CollectionItem,
   type DistrictOverview,
   type MapBuilding,
@@ -52,7 +50,6 @@ import {
   type ScanRejectReason,
   type ScanSubmission,
   type StepResult,
-  type StyleCollections,
   type TasksState,
 } from '@/types/game'
 import { ApiError, toApiError, withRetry } from './errors'
@@ -933,36 +930,6 @@ export class GameApi implements CandidateMatcher {
           }
         : null,
     }
-  }
-
-  /** style_collections() (migration 021): style collections from OSM tags and found buildings per rarity. */
-  async getStyleCollections(): Promise<StyleCollections> {
-    const o = obj(await withRetry(() => unwrap(this.client.rpc('style_collections'))), 'style_collections')
-    return {
-      collections: arr(o.collections, 'style_collections.collections').map((row) => {
-        const c = obj(row, 'style_collection')
-        return { id: oneOf(c, 'id', STYLE_COLLECTIONS), collected: num(c, 'collected'), total: num(c, 'total') }
-      }),
-      rarity: arr(o.rarity, 'style_collections.rarity').map((row) => {
-        const r = obj(row, 'rarity_count')
-        return { rarity: oneOf(r, 'rarity', ['rare', 'epic', 'legendary'] as const), found: num(r, 'found'), total: num(r, 'total') }
-      }),
-    }
-  }
-
-  async getLandmarkCollections(): Promise<LandmarkCollection[]> {
-    const rows = arr(await withRetry(() => unwrap(this.client.rpc('landmark_collections'))), 'landmark_collections')
-    return rows.map((row) => {
-      const c = obj(row, 'landmark_collection')
-      return {
-        id: str(c, 'id'),
-        title: str(c, 'title'),
-        items: arr(c.items, 'landmark_collection.items').map((item) => {
-          const l = obj(item, 'landmark')
-          return { id: str(l, 'id'), name: str(l, 'name'), marked: bool(l, 'marked') }
-        }),
-      }
-    })
   }
 
   async getAreaQuests(area: GameAreaId): Promise<AreaQuests> {

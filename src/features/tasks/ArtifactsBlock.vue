@@ -1,35 +1,24 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { services } from '@/app/providers/services'
+import { computed, onMounted } from 'vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { collectionPhoto } from '@/features/routes/photos'
-import { toApiError, type ApiError } from '@/services/api/errors'
 import { useAreaQuestsStore } from '@/stores/areaQuests'
-import type { Rarity, StyleCollections } from '@/types/game'
+import { useCollectionStore } from '@/stores/collection'
+import type { Rarity } from '@/types/game'
 import rareBadge from '@/assets/collections/rare.webp'
 import epicBadge from '@/assets/collections/epic.webp'
 import legendaryBadge from '@/assets/collections/legendary.webp'
 
 /**
  * «Коллекция и артефакты» and «Редкость артефактов» (mockup Tasks.jpg) on the tasks page. The collections
- * are the Zavidovo artifact collections (area_quests, migration 026); whether a rarity was found at all
- * comes from style_collections (migration 021), the only source of found counts per rarity.
+ * are the Zavidovo artifact collections (area_quests, migration 026); a rarity is greyed out until a
+ * building of it is opened (the player's collection).
  */
 const quests = useAreaQuestsStore()
 const collections = computed(() => quests.data?.collections ?? [])
 const earned = (items: { earnedAt: string | null }[]) => items.filter((i) => i.earnedAt).length
 
-const styles = ref<StyleCollections | null>(null)
-const stylesError = ref<ApiError | null>(null)
-
-async function loadStyles(): Promise<void> {
-  stylesError.value = null
-  try {
-    styles.value = await services().api.getStyleCollections()
-  } catch (e) {
-    stylesError.value = toApiError(e)
-  }
-}
+const collection = useCollectionStore()
 
 type Rare = Exclude<Rarity, 'common'>
 const RARITIES: Rare[] = ['rare', 'epic', 'legendary']
@@ -38,13 +27,13 @@ const RARITY_INFO: Record<Rare, { title: string; note: string; badge: string }> 
   epic: { title: 'Эпический', note: 'Очень редко', badge: epicBadge },
   legendary: { title: 'Легендарный', note: 'Крайне редко', badge: legendaryBadge },
 }
-/** greyed out until one is found; while the counts are unknown nothing is greyed */
-const none = (r: Rare) => !!styles.value && (styles.value.rarity.find((x) => x.rarity === r)?.found ?? 0) === 0
+/** greyed out until one is found; while the collection is loading nothing is greyed */
+const none = (r: Rare) => collection.loaded && !collection.items.some((i) => i.rarity === r)
 const ratio = (n: number, total: number) => `${total > 0 ? Math.min(1, n / total) * 100 : 0}%`
 
 onMounted(() => {
   void quests.load()
-  void loadStyles()
+  void collection.load()
 })
 </script>
 
@@ -72,10 +61,6 @@ onMounted(() => {
 
     <section class="block">
       <h2>Редкость артефактов</h2>
-      <p v-if="stylesError" class="block__note">
-        Не удалось загрузить.
-        <button class="link" @click="loadStyles">Повторить</button>
-      </p>
       <ul class="rarity">
         <li v-for="r in RARITIES" :key="r" class="rarity__row" :class="{ 'rarity__row--none': none(r) }">
           <img class="rarity__badge" :src="RARITY_INFO[r].badge" alt="" />
@@ -120,19 +105,6 @@ $blue: #0189ff;
   background: #f2f2f7;
   color: #000;
 }
-.block__note {
-  margin-top: 8px;
-  font-size: 12px;
-  color: #8e8e93;
-}
-.link {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: $blue;
-  font: inherit;
-}
-
 .styles {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -321,22 +321,6 @@ export interface TasksState {
   } | null
 }
 
-export const STYLE_COLLECTIONS = ['constructivism', 'stalinist', 'water_tower'] as const
-export type StyleCollectionId = (typeof STYLE_COLLECTIONS)[number]
-
-/** style_collections() (migration 021): OSM buildings of a style the player walked past; rarity counts. */
-export interface StyleCollections {
-  collections: { id: StyleCollectionId; collected: number; total: number }[]
-  rarity: { rarity: Exclude<Rarity, 'common'>; found: number; total: number }[]
-}
-
-/** landmark_collections() (migration 023): curated places the player marks on site */
-export interface LandmarkCollection {
-  id: string
-  title: string
-  items: { id: string; name: string; marked: boolean }[]
-}
-
 export const PLACE_TAGS = ['sport', 'culture', 'kids', 'free', 'food', 'rest'] as const
 /** the map's category chips (migration 027) */
 export type PlaceTag = (typeof PLACE_TAGS)[number]

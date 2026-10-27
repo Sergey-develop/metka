@@ -1,49 +1,27 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useSwipeBack } from '@/features/locations/swipeBack'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import StateBlock from '@/components/ui/StateBlock.vue'
-import { services } from '@/app/providers/services'
-import { toApiError, type ApiError } from '@/services/api/errors'
-import type { LandmarkCollection } from '@/types/game'
-import skyscrapersArt from '@/assets/landmarks/skyscrapers.webp'
-import oldTreesArt from '@/assets/landmarks/old-trees.webp'
-import monumentsArt from '@/assets/landmarks/monuments.webp'
-import metroArt from '@/assets/landmarks/metro.webp'
+import { useSwipeBack } from '@/features/locations/swipeBack'
+import { collectionPhoto } from '@/features/routes/photos'
+import { useAreaQuestsStore } from '@/stores/areaQuests'
+import type { ArtifactCollection } from '@/types/game'
 
 /**
- * «Коллекция и артефакты» (mockup «Коллекция и артефакты.jpg»): curated collections of places
- * (migration 023) with the places the player has marked.
+ * «Коллекция и артефакты» (mockup «Коллекция и артефакты.jpg»): the Zavidovo artifact collections — the
+ * same as on the tasks page — with every artifact, how to get it and whether it is earned.
  */
 const router = useRouter()
 /** swipe right: back to the profile it lies over */
 const swipeBack = useSwipeBack('/profile')
+const quests = useAreaQuestsStore()
+const collections = computed(() => quests.data?.collections ?? null)
 
-/** photos are cut from the mockup */
-const ART: Record<string, string> = {
-  skyscrapers: skyscrapersArt,
-  old_trees: oldTreesArt,
-  monuments: monumentsArt,
-  metro: metroArt,
-}
+const earned = (c: ArtifactCollection) => c.items.filter((i) => i.earnedAt).length
+const ratio = (c: ArtifactCollection) => `${c.items.length > 0 ? (earned(c) / c.items.length) * 100 : 0}%`
 
-const collections = ref<LandmarkCollection[] | null>(null)
-const error = ref<ApiError | null>(null)
-
-async function load(): Promise<void> {
-  error.value = null
-  try {
-    collections.value = await services().api.getLandmarkCollections()
-  } catch (e) {
-    error.value = toApiError(e)
-  }
-}
-
-const markedCount = (c: LandmarkCollection) => c.items.filter((i) => i.marked).length
-const ratio = (c: LandmarkCollection) => `${c.items.length > 0 ? (markedCount(c) / c.items.length) * 100 : 0}%`
-
-onMounted(() => void load())
+onMounted(() => void quests.load())
 </script>
 
 <template>
@@ -54,28 +32,31 @@ onMounted(() => void load())
     </header>
 
     <StateBlock
-      v-if="error"
+      v-if="quests.error && !collections"
       kind="error"
-      :title="error.code === 'offline' ? 'Нет сети' : 'Не удалось загрузить'"
+      :title="quests.error.code === 'offline' ? 'Нет сети' : 'Не удалось загрузить'"
       action-label="Повторить"
-      @action="load"
+      @action="quests.load(true)"
     />
     <StateBlock v-else-if="!collections" kind="loading" title="Загружаем коллекции…" />
     <ul v-else class="cv__list">
       <li v-for="c in collections" :key="c.id" class="lc">
-        <img v-if="ART[c.id]" class="lc__art" :src="ART[c.id]" alt="" />
+        <img v-if="collectionPhoto(c.id)" class="lc__art" :src="collectionPhoto(c.id)!" alt="" />
         <div class="lc__head">
-          <h2>{{ c.title }}</h2>
-          <span class="lc__count">{{ markedCount(c) }}/{{ c.items.length }}</span>
+          <h2>«{{ c.title }}»</h2>
+          <span class="lc__count">{{ earned(c) }}/{{ c.items.length }}</span>
         </div>
-        <span class="lc__bar" role="progressbar" :aria-valuenow="markedCount(c)" :aria-valuemax="c.items.length" :aria-label="c.title">
+        <span class="lc__bar" role="progressbar" :aria-valuenow="earned(c)" :aria-valuemax="c.items.length" :aria-label="c.title">
           <span :style="{ width: ratio(c) }" />
         </span>
         <ul class="lc__items">
-          <li v-for="item in c.items" :key="item.id" class="lc__item" :class="{ 'lc__item--on': item.marked }">
-            <span class="lc__check" aria-hidden="true"><AppIcon v-if="item.marked" name="check" :size="14" /></span>
-            <span>{{ item.name }}</span>
-            <span class="visually-hidden">{{ item.marked ? '— отмечено' : '' }}</span>
+          <li v-for="item in c.items" :key="item.id" class="lc__item" :class="{ 'lc__item--on': item.earnedAt }">
+            <span class="lc__check" aria-hidden="true"><AppIcon v-if="item.earnedAt" name="check" :size="14" /></span>
+            <span class="lc__name">
+              {{ item.title }}
+              <small>{{ item.how }}</small>
+            </span>
+            <span class="visually-hidden">{{ item.earnedAt ? '— получен' : '' }}</span>
           </li>
         </ul>
       </li>
@@ -186,6 +167,14 @@ $blue: #0189ff;
   gap: 12px;
   font-size: 13px;
   color: #000;
+}
+.lc__name {
+  display: flex;
+  flex-direction: column;
+  small {
+    font-size: 12px;
+    color: #8e8e93;
+  }
 }
 .lc__check {
   flex: none;

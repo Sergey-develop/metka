@@ -5,9 +5,8 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import TasksView from '@/features/tasks/TasksView.vue'
 import { timeLeft } from '@/features/tasks/tasksText'
 import { services } from '@/app/providers/services'
-import { ApiError } from '@/services/api/errors'
 import { useAuthStore } from '@/stores/auth'
-import type { AreaQuests, QuestRoute, StyleCollections, TasksState } from '@/types/game'
+import type { AreaQuests, CollectionItem, QuestRoute, TasksState } from '@/types/game'
 import { installFakeServices } from './helpers'
 
 const TASKS: TasksState = {
@@ -19,14 +18,16 @@ const TASKS: TasksState = {
   ],
   season: null,
 }
-const STYLES: StyleCollections = {
-  collections: [],
-  rarity: [
-    { rarity: 'rare', found: 2, total: 5 },
-    { rarity: 'epic', found: 1, total: 3 },
-    { rarity: 'legendary', found: 0, total: 1 },
-  ],
-}
+/** the buildings the player has opened: a rare and an epic one, no legendary yet */
+const COLLECTION: CollectionItem[] = (['rare', 'epic'] as const).map((rarity, i) => ({
+  buildingId: `b${i}`,
+  name: `Здание ${i}`,
+  rarity,
+  imageUrl: null,
+  districtId: null,
+  discoveredAt: '2026-10-28T10:00:00Z',
+  photoPath: null,
+}))
 
 const route = (slug: string, questTitle: string, steps: number, completedAt: string | null = null): QuestRoute => ({
   id: slug, slug, title: slug, questTitle, description: 'Исследуй бухту', duration: '30 мин', audience: 'Для всех', categories: [],
@@ -48,7 +49,7 @@ const QUESTS: AreaQuests = {
 
 type Api = {
   getTasks: () => Promise<TasksState>
-  getStyleCollections: () => Promise<StyleCollections>
+  getCollection: () => Promise<CollectionItem[]>
   getAreaQuests: () => Promise<AreaQuests>
 }
 const api = () => services().api as unknown as Api
@@ -70,7 +71,7 @@ beforeEach(() => {
   installFakeServices()
   useAuthStore().session = { user: { id: 'u1' } } as never
   api().getTasks = vi.fn(async () => structuredClone(TASKS))
-  api().getStyleCollections = vi.fn(async () => structuredClone(STYLES))
+  api().getCollection = vi.fn(async () => structuredClone(COLLECTION))
   api().getAreaQuests = vi.fn(async () => structuredClone(QUESTS))
 })
 
@@ -105,13 +106,10 @@ describe('TasksView', () => {
     expect(rows[0]!.classes()).not.toContain('rarity__row--none')
   })
 
-  it('a failed rarity load offers a retry and keeps the tasks', async () => {
-    api().getStyleCollections = vi.fn(async () => {
-      throw new ApiError('offline')
-    })
+  it('no Moscow style collections any more: only the Zavidovo artifact collections', async () => {
     const w = await mountView()
-    expect(w.text()).toContain('Не удалось загрузить')
-    expect(w.text()).toContain('Найди 2 объекта')
+    expect(w.text()).not.toContain('Коллекции по стилям')
+    expect(w.text()).not.toContain('Не удалось загрузить')
   })
 })
 

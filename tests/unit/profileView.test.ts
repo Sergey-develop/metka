@@ -117,13 +117,22 @@ describe('ProfileView', () => {
     expect(w.find('h1').text()).toBe('Михаил') // the profile, under the page
   })
 
-  it('an empty diary and collection invite to start, instead of grey tiles that look unloaded', async () => {
+  it('an empty diary invites to start; the collection shows the Zavidovo artifact collections, as the tasks page', async () => {
+    ;(services().api as unknown as { getAreaQuests: () => Promise<unknown> }).getAreaQuests = async () => ({
+      routes: [],
+      places: [],
+      visits: [],
+      collections: [
+        { id: 'zav-elements', title: 'Стихии Завидово', items: [{ id: 'a', title: 'A', how: '', earnedAt: '2026-10-28T10:00:00Z' }, { id: 'b', title: 'B', how: '', earnedAt: null }] },
+      ],
+    })
     const w = await mountProfile()
     const empty = w.findAll('.empty')
-    expect(empty.map((e) => e.find('b').text())).toEqual(['Здесь будут твои фото', 'Пока ни одной находки'])
+    expect(empty.map((e) => e.find('b').text())).toEqual(['Здесь будут твои фото'])
     expect(empty[0]!.attributes('href')).toBe('/scan')
-    expect(empty[1]!.attributes('href')).toBe('/map')
-    expect(w.findAll('.strip__item:not(.strip__item--skeleton)')).toHaveLength(0)
+    const coll = w.findAll('.strip__item--coll')
+    expect(coll.map((c) => [c.find('.strip__coll-name').text(), c.find('.strip__coll-count').text()])).toEqual([['«Стихии Завидово»', '1/2']])
+    expect(coll[0]!.attributes('href')).toBe('/collection')
   })
 
   it('shows the header, level and share of Moscow from real data', async () => {
