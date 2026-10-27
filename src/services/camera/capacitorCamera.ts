@@ -1,4 +1,4 @@
-import { Camera, CameraErrorCode } from '@capacitor/camera'
+import { Camera, CameraErrorCode, CameraResultType, CameraSource } from '@capacitor/camera'
 import { errorCode, errorMessage, normalizePermission, type AppPermissionState } from '../shared'
 import { CameraError, type CameraService, type CapturedPhoto } from './types'
 
@@ -38,28 +38,44 @@ export class CapacitorCameraService implements CameraService {
     }
   }
 
+  /**
+   * The photo comes back as base64 through the bridge. Not as a file path (`webPath`): the app shows the
+   * site from CAP_SERVER_URL (https://…github.io), and that page may not read the app's local
+   * `capacitor://localhost/_capacitor_file_/…` files — fetch failed and every photo ended in «Не удалось
+   * сделать снимок» (2026-10-27). takePhoto() of camera 8 gives base64 only for a thumbnail, so this uses
+   * getPhoto() (deprecated, still supported) with CameraResultType.Base64.
+   */
   async takePhoto(): Promise<CapturedPhoto> {
-    let webPath: string | undefined
+    let base64: string | undefined
+    let format = 'jpeg'
     try {
-      const result = await Camera.takePhoto({
+      const photo = await Camera.getPhoto({
+        source: CameraSource.Camera,
+        resultType: CameraResultType.Base64,
         quality: 85,
-        targetWidth: MAX_SIDE_PX,
-        targetHeight: MAX_SIDE_PX,
+        width: MAX_SIDE_PX,
+        height: MAX_SIDE_PX,
         correctOrientation: true,
         saveToGallery: false,
       })
-      webPath = result.webPath
+      base64 = photo.base64String
+      format = photo.format || format
     } catch (error) {
       throw mapCameraError(error)
     }
-    if (!webPath) throw new CameraError('failed', 'camera returned no image')
-    const response = await fetch(webPath)
-    if (!response.ok) throw new CameraError('failed', `cannot read captured image (${response.status})`)
-    const blob = await response.blob()
+    if (!base64) throw new CameraError('failed', 'camera returned no image')
+    const blob = base64ToBlob(base64, `image/${format}`)
     return { blob, previewUrl: URL.createObjectURL(blob) }
   }
 
   release(photo: CapturedPhoto): void {
     URL.revokeObjectURL(photo.previewUrl)
   }
+}
+
+function base64ToBlob(base64: string, type: string): Blob {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return new Blob([bytes], { type })
 }
