@@ -68,6 +68,10 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Камера нужна, чтобы сфотографировать фасад здания и открыть его в коллекции.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Снимки зданий можно сохранить в «Фото».</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Доступ к «Фото» нужен, чтобы выбрать снимок здания из галереи.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Местоположение нужно, чтобы показать здания рядом и подтвердить, что вы находитесь у здания.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
