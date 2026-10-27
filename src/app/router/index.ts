@@ -76,6 +76,8 @@ const routes: RouteRecordRaw[] = [
           { path: 'places/:id', name: 'map-place', component: () => import('@/features/routes/PlaceDetailView.vue'), props: true },
           { path: 'locations/:id', name: 'map-location', component: () => import('@/features/locations/LocationDetailView.vue'), props: true },
           { path: 'routes/:slug', name: 'map-route', component: () => import('@/features/routes/RouteDetailView.vue'), props: true },
+          // the Zavidovo routes, places and artifacts (same URL /routes): over the map too, a swipe back shows it
+          { path: '/routes', name: 'routes', component: () => import('@/features/routes/RoutesView.vue') },
         ],
       },
       // camera-first: which building is in front of the camera (approximate, GPS + compass + OSM); the tab bar stays, as in the mockup
@@ -100,7 +102,6 @@ const routes: RouteRecordRaw[] = [
         ],
       },
       // Zavidovo: quest routes, places and artifacts (migration 026)
-      { path: 'routes', name: 'routes', component: () => import('@/features/routes/RoutesView.vue') },
       { path: 'routes/random', name: 'random-route', component: () => import('@/features/routes/RandomRouteView.vue') },
       { path: 'routes/:slug', name: 'route', component: () => import('@/features/routes/RouteDetailView.vue'), props: true },
       { path: 'album', name: 'album', component: () => import('@/features/album/AlbumView.vue') },

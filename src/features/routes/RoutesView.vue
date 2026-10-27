@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { stackedName } from '@/app/pageStack'
+import { useSwipeBack } from '@/features/locations/swipeBack'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import CategoryChips from '@/components/ui/CategoryChips.vue'
 import FilledIcon from '@/components/ui/FilledIcon.vue'
@@ -18,6 +20,10 @@ import { doneCount, hasPoint, ofKind, PLACE_CHIPS, placeTarget, ZONE_TITLE, type
  * collections (area_quests, migration 026).
  */
 const router = useRouter()
+/** the map this page lies over: routes and places opened from here lie over it too */
+const here = useRoute()
+/** swipe right: back to the map */
+const swipeBack = useSwipeBack('/map')
 const quests = useAreaQuestsStore()
 const map = useMapStore()
 const route = useRouteStore()
@@ -71,7 +77,7 @@ onMounted(() => void quests.load())
 </script>
 
 <template>
-  <main class="page zr">
+  <main class="page zr" v-on="swipeBack.handlers">
     <header class="zr__head">
       <button class="zr__back" aria-label="Назад" @click="router.back()"><AppIcon name="back" /></button>
       <h1>Завидово</h1>
@@ -99,7 +105,7 @@ onMounted(() => void quests.load())
       </RouterLink>
       <ul class="zr__list">
         <li v-for="r in quests.data.routes" :key="r.id">
-          <RouterLink :to="{ name: 'route', params: { slug: r.slug } }" class="rc" :class="{ 'rc--done': r.completedAt }">
+          <RouterLink :to="{ name: stackedName(here, 'route'), params: { slug: r.slug } }" class="rc" :class="{ 'rc--done': r.completedAt }">
             <img v-if="routePhoto(r)" class="rc__cover" :src="routePhoto(r)!" alt="" loading="lazy" />
             <span class="rc__top">
               <span class="rc__time"><FilledIcon name="runner" :size="16" />{{ r.duration }}</span>
@@ -125,7 +131,7 @@ onMounted(() => void quests.load())
         <h2>Рядом с тобой</h2>
         <ul class="pl">
           <li v-for="n in nearby" :key="n.place.id" class="pl__item pl__item--near">
-            <RouterLink :to="{ name: 'place', params: { id: n.place.id } }" class="pl__body">
+            <RouterLink :to="{ name: stackedName(here, 'place'), params: { id: n.place.id } }" class="pl__body">
               <p class="pl__name">{{ n.place.name }}</p>
               <p class="pl__meta"><span>{{ formatDistance(n.meters) }}</span><span>+{{ n.place.rewardXp }} опыта за отметку</span></p>
             </RouterLink>
@@ -137,7 +143,7 @@ onMounted(() => void quests.load())
         <ul class="pl">
           <li v-for="p in z.places" :key="p.id" class="pl__item">
             <img v-if="placePhoto(p)" class="pl__photo" :src="placePhoto(p)!" alt="" loading="lazy" />
-            <RouterLink :to="{ name: 'place', params: { id: p.id } }" class="pl__body">
+            <RouterLink :to="{ name: stackedName(here, 'place'), params: { id: p.id } }" class="pl__body">
               <p class="pl__name">{{ p.name }}<span v-if="quests.visited.has(p.id)" class="pl__visited" aria-label="отмечено"> ✓</span></p>
               <p class="pl__meta">
                 <span>{{ p.category }}</span>
@@ -186,6 +192,8 @@ $blue: #0189ff;
 $card: #f3f3f9;
 
 .zr {
+  // swiped right back to the map (useSwipeBack); vertical scrolling stays the browser's
+  touch-action: pan-y;
   padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + 24px);
   background: #fff;
 }
