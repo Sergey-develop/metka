@@ -200,7 +200,7 @@ const fmt = (n: number) => n.toLocaleString('ru-RU')
 const dash = (n: number | null | undefined) => (n == null ? '—' : fmt(n))
 
 const members = computed(() => clan.membership?.members ?? [])
-/** up to 4 faces on the clan card; gray placeholders only while there is no clan */
+/** up to 4 faces of the clanmates on the clan card; none without a clan */
 const CLAN_FACES = 4
 const clanFaces = computed(() => members.value.slice(0, CLAN_FACES))
 
@@ -321,12 +321,10 @@ watch(
         <a href="/clan" class="clan" @click.prevent="clanOpen = true">
           <span class="clan__top">
             <ClanAvatar v-if="clan.membership" class="clan__crest" :url="clan.membership.clan.avatarUrl" :tag="clan.membership.clan.tag" :size="30" />
-            <span v-else class="clan__crest clan__crest--none" aria-hidden="true" />
-            <span class="clan__faces" aria-hidden="true">
-              <template v-if="clan.membership">
-                <PlayerAvatar v-for="m in clanFaces" :key="m.userId" class="clan__face" :url="m.avatarUrl" :figure="m.avatarKey" :name="m.username" :size="30" />
-              </template>
-              <span v-for="i in CLAN_FACES" v-else :key="i" class="clan__face" />
+            <!-- no clan: a shield to join one, no grey «members» that look like an unloaded list -->
+            <span v-else class="clan__crest clan__crest--none" aria-hidden="true"><AppIcon name="shield" :size="18" /></span>
+            <span v-if="clanFaces.length" class="clan__faces" aria-hidden="true">
+              <PlayerAvatar v-for="m in clanFaces" :key="m.userId" class="clan__face" :url="m.avatarUrl" :figure="m.avatarKey" :name="m.username" :size="30" />
             </span>
           </span>
           <h2 class="clan__name">{{ clan.membership ? `Клан «${clan.membership.clan.name}»` : 'Клан' }}</h2>
@@ -340,7 +338,7 @@ watch(
               <dd>{{ dash(stats?.clan?.discoveries) }}</dd>
             </div>
           </dl>
-          <p v-else class="clan__empty">Ты пока не в клане. Найди команду</p>
+          <p v-else class="clan__empty">Ты пока не в клане. <span class="clan__join">Найти команду</span></p>
         </a>
 
         <button v-if="!isOther" class="fav" @click="openFavorites">
@@ -658,8 +656,11 @@ $gray: #6d6d6e;
 .clan__crest--none {
   width: 30px;
   height: 30px;
+  display: grid;
+  place-items: center;
   border-radius: 50%;
   background: #cfe1f8;
+  color: #0189ff;
 }
 .clan__faces {
   display: flex;
@@ -715,6 +716,10 @@ $gray: #6d6d6e;
   margin-top: 6px;
   font-size: 12px;
   color: #6d6d6e;
+}
+.clan__join {
+  color: #0189ff;
+  font-weight: 500;
 }
 .fav {
   position: relative;

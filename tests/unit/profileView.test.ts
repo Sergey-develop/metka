@@ -256,10 +256,11 @@ describe('ProfileView', () => {
     expect(html.indexOf('class="duo')).toBeLessThan(html.indexOf('class="mcard'))
   })
 
-  it('without a clan the card keeps 4 placeholders', async () => {
+  it('without a clan the card has no grey «members»: a shield and an invitation to find a team', async () => {
     const w = await mountProfile()
-    expect(w.findAll('.clan__face')).toHaveLength(4)
-    expect(w.find('.clan__face img').exists()).toBe(false)
+    expect(w.findAll('.clan__face')).toHaveLength(0)
+    expect(w.find('.clan__crest--none svg').exists()).toBe(true)
+    expect(w.find('.clan__empty').text()).toBe('Ты пока не в клане. Найти команду')
   })
 
   it('opens account settings from the gear', async () => {
