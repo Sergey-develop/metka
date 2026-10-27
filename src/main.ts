@@ -18,6 +18,7 @@ async function bootstrap(): Promise<void> {
   const result = readConfig(import.meta.env)
   if (!result.ok) {
     createApp(ConfigErrorView, { missing: result.missing }).mount('#app')
+    document.getElementById('boot')?.remove()
     return
   }
 
@@ -59,6 +60,17 @@ async function bootstrap(): Promise<void> {
 
   await router.isReady()
   app.mount('#app')
+  // the «Загрузка…» / error screen of index.html is no longer needed
+  document.getElementById('boot')?.remove()
 }
 
-void bootstrap()
+declare global {
+  interface Window {
+    /** index.html: shows a start-up error on screen (no dev tools on a phone) */
+    __metkaBootFail?: (text: string) => void
+  }
+}
+
+bootstrap().catch((e: unknown) => {
+  window.__metkaBootFail?.(e instanceof Error ? (e.stack ?? e.message) : String(e))
+})

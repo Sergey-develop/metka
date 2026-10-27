@@ -12,7 +12,8 @@ const config: CapacitorConfig = {
   appId: 'app.metka.game',
   appName: 'Метка',
   webDir: 'dist',
-  ...(serverUrl ? { server: { url: serverUrl, cleartext: false } } : {}),
+  // errorPath: a page of the bundle shown when the site does not open (no network…) instead of a blank screen
+  ...(serverUrl ? { server: { url: serverUrl, cleartext: false, errorPath: 'native-error.html' } } : {}),
   android: {
     // ship https-only; cleartext stays disabled
     allowMixedContent: false,
@@ -22,6 +23,8 @@ const config: CapacitorConfig = {
   },
   ios: {
     contentInset: 'never',
+    // the web view's colour before the page paints: light, as the app, not black
+    backgroundColor: '#f5f4f2',
   },
 }
 

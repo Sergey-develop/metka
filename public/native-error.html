@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Метка</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #f5f4f2; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px;
+    box-sizing: border-box; font: 16px/1.4 -apple-system, system-ui, sans-serif; color: #3c3c43; text-align: center; }
+  b { font-size: 18px; color: #000; }
+  button { padding: 12px 22px; border: 0; border-radius: 12px; background: #0189ff; color: #fff; font-size: 16px; }
+  small { color: #8e8e93; word-break: break-all; }
+</style>
+</head>
+<body>
+  <!-- the iOS/Android app shows this (capacitor.config server.errorPath) when the site does not open -->
+  <b>Не удалось открыть «Метку»</b>
+  <span>Проверьте интернет и попробуйте ещё раз.</span>
+  <button type="button" onclick="location.replace('https://sergey-develop.github.io/metka/')">Повторить</button>
+  <small>sergey-develop.github.io/metka</small>
+</body>
+</html>

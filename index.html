@@ -5,9 +5,44 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#f4f5f7" />
     <title>Метка</title>
+    <style>
+      /* until the app mounts: a light page with «Загрузка…», never a blank (black in the iOS app) screen */
+      html, body { margin: 0; background: #f5f4f2; }
+      #boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; padding: 24px; font: 15px/1.4 -apple-system, system-ui, sans-serif; color: #6b6b70; text-align: center; }
+      #boot pre { max-width: 100%; white-space: pre-wrap; word-break: break-word; font-size: 12px; color: #b4441c; }
+      #boot button { padding: 10px 18px; border: 0; border-radius: 10px; background: #0189ff; color: #fff; font-size: 15px; }
+    </style>
   </head>
   <body>
+    <div id="boot"><span>Загрузка…</span></div>
     <div id="app"></div>
+    <script>
+      // Shows why the app did not start: there are no dev tools on a phone (the iOS app without a Mac).
+      // main.ts removes #boot once the app is mounted.
+      ;(function () {
+        var shown = false
+        function fail(text) {
+          var boot = document.getElementById('boot')
+          if (!boot || shown) return
+          shown = true
+          boot.innerHTML = '<span>Не удалось запустить «Метку»</span><pre></pre><button type="button">Перезагрузить</button>'
+          boot.querySelector('pre').textContent = String(text).slice(0, 600)
+          boot.querySelector('button').onclick = function () { location.reload() }
+        }
+        window.__metkaBootFail = fail
+        window.addEventListener('error', function (e) {
+          fail((e.message || 'error') + (e.filename ? '\n' + e.filename + ':' + e.lineno : ''))
+        })
+        window.addEventListener('unhandledrejection', function (e) {
+          var r = e.reason
+          fail(r && (r.stack || r.message) ? r.stack || r.message : String(r))
+        })
+        setTimeout(function () {
+          if (document.getElementById('boot')) fail('Приложение не запустилось за 20 секунд. Проверьте интернет.')
+        }, 20000)
+      })()
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
