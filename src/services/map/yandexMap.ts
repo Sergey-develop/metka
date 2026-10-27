@@ -30,7 +30,8 @@ export const MAP_COLORS = {
   plainStroke: '#8E97AB',
   unavailable: '#B9BCC8',
   /** Fog of War over unexplored land */
-  fog: '#D9DCE6',
+  /** milky white of the map mockup (карта.png, 2026-10-27), not the earlier grey-blue */
+  fog: '#F3F5F8',
   /** walking route line (the button blue) */
   route: '#0189FF',
 } as const
@@ -92,30 +93,31 @@ const TOP_FEATURES_Z_INDEX = 1600
 const TOP_MARKERS_SOURCE = 'metka-top-markers'
 const TOP_MARKERS_Z_INDEX = 1700
 /**
- * 0.85: the city stays visible under the fog (streets, blocks, names, metro), while walked land is
- * clearly brighter. Compared on screenshots at zoom 16–17: at 0.80 explored and unexplored look
- * almost the same; at 0.90 and above names fade out. Explored land is the plain map, no outline.
+ * 0.72 of milky white, as in the mockup: streets, names and stations show through, washed out, while
+ * walked land keeps its colours. (The grey-blue fog of 2026-10-19 needed 0.85 for the same contrast.)
  */
-const FOG_OPACITY = 0.85
+const FOG_OPACITY = 0.72
 
 /**
- * Soft edge of the fog: three translucent strokes in the fog colour along the (smoothed) borders of
- * explored land. Centred on the border, so half of each stroke lies on the fog (no visible change)
- * and half drifts ≈FOG_FEATHER_M onto the open map, fading out: mist, not a frame. Widths follow
+ * Soft edge of the fog: six translucent strokes in the fog colour along the (smoothed) borders of
+ * explored land, the narrower on top, so the mist is densest at the border and thins out over
+ * ≈FOG_FEATHER_M on both sides — the mockup's fog melts away instead of ending at a line. Widths follow
  * the zoom so the mist keeps the same size on the ground; only the style changes with the zoom.
  */
-const FOG_FEATHER_M = 6
+const FOG_FEATHER_M = 12
+const FOG_FEATHER_STEPS = 6
 
 export function fogFeatherStyle(zoom: number): DrawingStyle {
   const metresPerPx = (156_543.03 * Math.cos((55.75 * Math.PI) / 180)) / 2 ** zoom
-  const px = Math.min(16, Math.max(2, FOG_FEATHER_M / metresPerPx))
+  const px = Math.min(32, Math.max(3, FOG_FEATHER_M / metresPerPx))
   return {
     interactive: false,
-    stroke: [
-      { color: MAP_COLORS.fog, width: 2 * px, opacity: 0.22 },
-      { color: MAP_COLORS.fog, width: (4 / 3) * px, opacity: 0.3 },
-      { color: MAP_COLORS.fog, width: (2 / 3) * px, opacity: 0.4 },
-    ],
+    // at the border all six overlap (≈ 0.5 of fog on the open side), at the outer edge only one
+    stroke: Array.from({ length: FOG_FEATHER_STEPS }, (_, i) => ({
+      color: MAP_COLORS.fog,
+      width: 2 * px * (1 - i / FOG_FEATHER_STEPS),
+      opacity: 0.11,
+    })),
   }
 }
 

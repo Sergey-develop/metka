@@ -391,13 +391,14 @@ describe('YandexMapService', () => {
     expect(map.of(FakeFeature).some((x) => x.props.id === 'explored')).toBe(true)
   })
 
-  it('fog is 85 % opaque; its only edge effect is a soft mist in the fog colour that follows the zoom', async () => {
+  it('fog is milky white, 72 % opaque; its only edge effect is a soft mist in the fog colour that follows the zoom', async () => {
     const { service, map } = await mounted()
     service.render(scene({ fog: true, exploredCells: [[1456534, 1208997]] }))
     const fog = map.of(FakeFeature).find((f) => f.props.id === 'fog')!
     const feather = map.of(FakeFeature).find((f) => f.props.id === 'fog-feather')!
     const style = fog.props.style as { fillOpacity: number; stroke: { width: number }[] }
-    expect(style.fillOpacity).toBe(0.85)
+    expect(style.fillOpacity).toBe(0.72)
+    expect((fog.props.style as { fill: string }).fill).toBe('#F3F5F8')
     expect(style.stroke.every((s) => s.width === 0)).toBe(true)
     // nothing but the fog and its mist in the fog layer; the mist is fog-coloured (no frame, no glow)
     expect(map.of(FakeFeature).filter((f) => f.props.source === fog.props.source)).toEqual([fog, feather])
@@ -405,6 +406,10 @@ describe('YandexMapService', () => {
     expect(strokes.interactive).toBe(false)
     expect(new Set(strokes.stroke.map((s) => s.color))).toEqual(new Set([(fog.props.style as { fill: string }).fill]))
     expect(strokes.stroke.every((s) => s.opacity < 0.5)).toBe(true)
+    // graded: several strokes, the narrower on top, so the mist thins out away from the border
+    expect(strokes.stroke.length).toBeGreaterThanOrEqual(5)
+    const widths = strokes.stroke.map((s) => s.width)
+    expect(widths).toEqual([...widths].sort((a, b) => b - a))
     // the mist keeps its size on the ground: wider strokes when zoomed in; geometry is not rebuilt
     const width = () => Math.max(...(feather.props.style as { stroke: { width: number }[] }).stroke.map((s) => s.width))
     const at16 = width()
