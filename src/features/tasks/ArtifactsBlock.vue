@@ -42,7 +42,7 @@ onMounted(() => {
     <section v-if="collections.length" class="block">
       <header class="block__head">
         <h2>Коллекция и артефакты</h2>
-        <RouterLink to="/routes" class="block__more" aria-label="Все артефакты"><AppIcon name="chevron" :size="20" /></RouterLink>
+        <RouterLink to="/collection" class="block__more" aria-label="Все коллекции и артефакты"><AppIcon name="chevron" :size="20" /></RouterLink>
       </header>
       <ul class="styles">
         <li v-for="c in collections" :key="c.id" class="style">

@@ -58,6 +58,7 @@ async function mountView() {
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: '/tasks', component: { template: '<div/>' } },
     { path: '/routes', component: { template: '<div/>' } },
+    { path: '/collection', component: { template: '<div/>' } },
     { path: '/routes/:slug', name: 'route', component: { template: '<div/>' } },
   ] })
   await router.push('/tasks')
@@ -100,6 +101,8 @@ describe('TasksView', () => {
     expect(cards.map((s) => s.find('.style__title').text())).toEqual(['«Стихии Завидово»'])
     expect(cards[0]!.find('.style__count').text()).toBe('1/3')
     expect(cards[0]!.find('img').attributes('src')).toContain('zav-bay')
+    // the chevron opens the same collections in full (the collection page), not the routes
+    expect(w.find('.block__more').attributes('href')).toBe('/collection')
     const rows = w.findAll('.rarity__row')
     expect(rows.map((r) => r.find('small').text())).toEqual(['Только ночью, в дождь или снег', 'Очень редко', 'Крайне редко'])
     expect(rows[2]!.classes()).toContain('rarity__row--none')
