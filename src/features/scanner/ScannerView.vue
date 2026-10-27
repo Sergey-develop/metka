@@ -34,8 +34,12 @@ onMounted(() => {
   scan.start(props.buildingId)
   // no recognition model yet: find out early whether this account may scan by location (test mode)
   if (!services().recognition.isAvailable()) void scan.checkLocationTester()
+  void scan.warmUp()
 })
-onBeforeUnmount(() => scan.cancel())
+onBeforeUnmount(() => {
+  scan.cancel()
+  scan.coolDown()
+})
 
 function close(): void {
   scan.cancel()

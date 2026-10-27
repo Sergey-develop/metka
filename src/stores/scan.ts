@@ -118,11 +118,55 @@ export const useScanStore = defineStore('scan', () => {
     return true
   }
 
+  /**
+   * GPS kept on while the scan screen is open, so a tap usually finds a fresh fix at once instead of
+   * waiting for a cold GPS («Определяем местоположение…» spun for many seconds). Never prompts: without
+   * permission the tap asks as before.
+   */
+  let liveFix: GeoFix | null = null
+  let unwatch: (() => void) | null = null
+  let warming = false
+  async function warmUp(): Promise<void> {
+    if (unwatch || warming) return
+    warming = true
+    try {
+      const { geolocation } = services()
+      if ((await geolocation.checkPermission()) !== 'granted') return
+      const stop = await geolocation.watchPosition(
+        (fix) => {
+          liveFix = fix
+          // the «N м от вас» line follows the player too
+          useMapStore().position = fix
+        },
+        () => undefined,
+      )
+      if (!warming) return stop() // left the screen meanwhile
+      unwatch = stop
+    } catch {
+      // no warm-up: the tap asks for a position itself
+    } finally {
+      warming = false
+    }
+  }
+  function coolDown(): void {
+    warming = false
+    unwatch?.()
+    unwatch = null
+    liveFix = null
+  }
+
+  /** a fix from the warm GPS this fresh is used at once */
+  const LIVE_FIX_MAX_AGE_MS = 15_000
+
   async function locate(target: MapBuilding): Promise<GeoFix | null> {
     phase.value = 'locating'
     let fix: GeoFix
+    const live = liveFix
     try {
-      fix = await services().geolocation.getCurrentPosition({ timeoutMs: 15_000, maxAgeMs: 10_000 })
+      fix =
+        live && Date.now() - live.timestamp <= LIVE_FIX_MAX_AGE_MS && live.accuracyM <= MAX_ACCURACY_M
+          ? live
+          : await services().geolocation.getCurrentPosition({ timeoutMs: 10_000, maxAgeMs: LIVE_FIX_MAX_AGE_MS })
     } catch (e) {
       const code = e instanceof GeolocationError ? e.code : 'unavailable'
       fail(
@@ -352,6 +396,7 @@ export const useScanStore = defineStore('scan', () => {
   }
 
   function reset(): void {
+    coolDown()
     testerCheck = null
     locationTestMode.value = false
     cancel()
@@ -388,6 +433,8 @@ export const useScanStore = defineStore('scan', () => {
     retry,
     cancel,
     onResume,
+    warmUp,
+    coolDown,
     reset,
   }
 })

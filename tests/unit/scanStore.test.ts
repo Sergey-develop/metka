@@ -157,6 +157,21 @@ describe('scan store', () => {
     expect(fakes.recognition.recognize).not.toHaveBeenCalled()
   })
 
+  it('the GPS warmed up on the scan screen gives the position at once (no waiting on the tap)', async () => {
+    const scan = startScan()
+    await scan.warmUp()
+    fakes.geolocation.setPosition(BUILDING.lat, BUILDING.lng, 10) // a fresh fix from the watch
+    const ask = vi.spyOn(fakes.geolocation, 'getCurrentPosition')
+    await scan.capture()
+    expect(ask).not.toHaveBeenCalled()
+    expect(scan.location).toMatchObject({ lat: BUILDING.lat, lng: BUILDING.lng })
+    // after leaving the screen a tap asks again
+    scan.coolDown()
+    scan.start(BUILDING.id)
+    await scan.capture()
+    expect(ask).toHaveBeenCalledTimes(1)
+  })
+
   it('a camera failure says where the app runs and what the camera said (shown small on screen)', async () => {
     fakes.camera.nextError = new CameraError('failed', 'cannot read captured image (0)')
     const scan = startScan()
