@@ -6,12 +6,15 @@ import { toApiError } from '@/services/api/errors'
 import { useAuthStore } from '@/stores/auth'
 import { useProfileStore } from '@/stores/profile'
 import { useScrollLock } from '@/utils/scrollLock'
+import { useSwipeDown } from '@/components/ui/swipeDown'
 
 // the page behind stays still while this is open
 useScrollLock()
 
 /** Account settings behind the gear on the profile screen: photo, game name, sign out. */
-defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: [] }>()
+/** swipe down to close, as the other sheets */
+const swipe = useSwipeDown(() => emit('close'))
 
 const auth = useAuthStore()
 const store = useProfileStore()
@@ -71,7 +74,8 @@ async function signOut(): Promise<void> {
 
 <template>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="settings-title" @keydown.esc="$emit('close')" @click.self="$emit('close')">
-    <div class="sheet__body">
+    <div class="sheet__body" v-on="swipe.handlers">
+      <span class="sheet__grip" aria-hidden="true" />
       <h2 id="settings-title" class="sheet__title">Настройки</h2>
 
       <section class="sheet__group">
@@ -158,6 +162,15 @@ async function signOut(): Promise<void> {
   padding: 22px 18px calc(var(--safe-bottom) + 18px);
   border-radius: 24px 24px 0 0;
   background: var(--c-surface);
+}
+.sheet__grip {
+  flex: none;
+  align-self: center;
+  width: 36px;
+  height: 5px;
+  margin: -10px 0 -6px;
+  border-radius: 3px;
+  background: #d1d1d6;
 }
 .sheet__title {
   font-size: 20px;

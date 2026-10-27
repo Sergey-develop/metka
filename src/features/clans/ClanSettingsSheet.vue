@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import { useClanStore } from '@/stores/clan'
 import { useScrollLock } from '@/utils/scrollLock'
+import { useSwipeDown } from '@/components/ui/swipeDown'
 
 // the page behind stays still while this is open
 useScrollLock()
@@ -10,6 +11,8 @@ useScrollLock()
 /** Behind the pencil on the clan screen: clan avatar (leader only) and leaving the clan. */
 const props = defineProps<{ isOwner: boolean; hasAvatar: boolean }>()
 const emit = defineEmits<{ close: [] }>()
+/** swipe down to close, as the other sheets */
+const swipe = useSwipeDown(() => emit('close'))
 
 const clan = useClanStore()
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -40,7 +43,8 @@ async function leave(): Promise<void> {
 
 <template>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="clan-settings-title" @keydown.esc="$emit('close')" @click.self="$emit('close')">
-    <div class="sheet__body">
+    <div class="sheet__body" v-on="swipe.handlers">
+      <span class="sheet__grip" aria-hidden="true" />
       <h2 id="clan-settings-title" class="sheet__title">Клан</h2>
 
       <section v-if="props.isOwner" class="sheet__group">
@@ -89,6 +93,15 @@ async function leave(): Promise<void> {
   .sheet__body {
     transition: transform 0.32s var(--ease);
   }
+}
+.sheet__grip {
+  flex: none;
+  align-self: center;
+  width: 36px;
+  height: 5px;
+  margin: -10px 0 -6px;
+  border-radius: 3px;
+  background: #d1d1d6;
 }
 .sheet-leave-active {
   transition-duration: 0.24s;
