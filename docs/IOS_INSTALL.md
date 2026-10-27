@@ -9,7 +9,7 @@
 
 | Имя | Значение |
 |---|---|
-| `CAP_SERVER_URL` | адрес сайта на Netlify, например `https://metka-xxxx.netlify.app` |
+| `CAP_SERVER_URL` | адрес сайта: `https://sergey-develop.github.io/metka/` (GitHub Pages; Netlify больше не используется — кончились кредиты) |
 | `VITE_SUPABASE_URL` | как в `.env` |
 | `VITE_SUPABASE_ANON_KEY` | как в `.env` (публичный ключ, не service_role) |
 | `VITE_YANDEX_MAPS_API_KEY` | как в `.env` |
