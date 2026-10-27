@@ -36,9 +36,9 @@ function pinLeaving(el: Element): void {
     <RouterView v-slot="{ Component, route }">
       <Transition :name="transition" :css="transition !== 'none'" @before-leave="pinLeaving">
         <!-- keyed by path: a page opened over itself (my profile → a clanmate's) is a new page with its
-             transition, not the old one silently refilled. The locations list and the place pages over
-             it share one key: the list stays mounted under them (they change inside LocationsView) -->
-        <component :is="Component" :key="route.matched.some((m) => m.name === 'locations') ? '/locations' : route.path" />
+             transition, not the old one silently refilled. A page over a tab page (a place over the map or
+             the locations list) shares the tab page's key: it stays mounted under it (PageOverlay) -->
+        <component :is="Component" :key="route.matched.length > 2 ? route.matched[1]!.path : route.path" />
       </Transition>
     </RouterView>
     <div class="nav-fade" aria-hidden="true" />

@@ -31,6 +31,7 @@ import MapCanvas from './MapCanvas.vue'
 import OutlineCard from './OutlineCard.vue'
 import RouteCard from './RouteCard.vue'
 import TasksSheet from './TasksSheet.vue'
+import PageOverlay from '@/components/ui/PageOverlay.vue'
 import MemoryEditor from '@/features/album/MemoryEditor.vue'
 import { gameAreaAt, ZAVIDOVO_HOME, type GameAreaId } from '@/utils/gameAreas'
 import { usePlaces } from '@/features/locations/places'
@@ -267,17 +268,20 @@ watch(mapCategory, (tag) => {
   if (here !== 'zavidovo') canvas.value?.flyTo(ZAVIDOVO_HOME.lng, ZAVIDOVO_HOME.lat, ZAVIDOVO_HOME.zoom)
 })
 
+/** the page the route card goes back to, opened over the map rather than instead of it ('/places/x' → '/map/places/x') */
+const overMap = (path: string) => (/^\/(places|locations)\/|^\/routes\/(?!random$)/.test(path) ? `/map${path}` : path)
+
 function selectBuilding(id: string): void {
   if (id.startsWith('place:')) {
     const placeId = id.slice('place:'.length)
     // a category point opens the place, a quest point its route
     if (mapCategory.value) {
-      void router.push({ name: 'place', params: { id: placeId } })
+      void router.push({ name: 'map-place', params: { id: placeId } })
       return
     }
     const r = quests.routes.find((x) => x.steps.some((s) => s.place?.id === placeId && !s.doneAt)) ??
       quests.routes.find((x) => x.steps.some((s) => s.place?.id === placeId))
-    void router.push(r ? { name: 'route', params: { slug: r.slug } } : '/routes')
+    void router.push(r ? { name: 'map-route', params: { slug: r.slug } } : '/routes')
     return
   }
   outlines.select(null)
@@ -533,7 +537,7 @@ onBeforeUnmount(() => {
         :no-location="!map.position && !!map.geoError"
         :style="routeSwipe.style.value"
         v-on="routeSwipe.handlers"
-        @open="routeSwipe.dragged() || router.push(route.returnTo ?? `/locations/${route.target.id}`)"
+        @open="routeSwipe.dragged() || router.push(overMap(route.returnTo ?? `/locations/${route.target.id}`))"
         @retry="route.retry()"
       />
     </div>
@@ -558,6 +562,9 @@ onBeforeUnmount(() => {
       @allow="map.startTracking('confirmed')"
       @later="map.dismissLocationPrompt()"
     />
+
+    <!-- a place, building or quest opened from here lies over the map, which stays as it was -->
+    <PageOverlay />
   </main>
 </template>
 

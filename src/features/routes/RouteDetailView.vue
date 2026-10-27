@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useSwipeBack } from '@/features/locations/swipeBack'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import CoinIcon from '@/components/ui/CoinIcon.vue'
 import FilledIcon from '@/components/ui/FilledIcon.vue'
@@ -28,6 +29,8 @@ const router = useRouter()
 const quests = useAreaQuestsStore()
 const map = useMapStore()
 const walk = useRouteStore()
+/** swipe right: back to the map it lies over, or to the routes */
+const swipeBack = useSwipeBack('/routes')
 
 const route = computed(() => quests.routes.find((r) => r.slug === props.slug) ?? null)
 const done = computed(() => (route.value ? doneCount(route.value) : 0))
@@ -132,7 +135,7 @@ onMounted(() => void quests.load())
 </script>
 
 <template>
-  <main class="rd">
+  <main class="rd" v-on="swipeBack.handlers">
     <div v-if="!route" class="rd__state">
       <button class="round" aria-label="Назад" @click="router.back()"><AppIcon name="back" :size="22" /></button>
       <StateBlock
@@ -315,6 +318,8 @@ $card: #f8f8fe;
 $panel: #efeff6;
 
 .rd {
+  // swiped right back (useSwipeBack); vertical scrolling stays the browser's
+  touch-action: pan-y;
   min-height: 100%;
   padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + 24px);
   background: #fff;

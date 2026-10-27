@@ -56,10 +56,10 @@ describe('LocationsView', () => {
     await router.push('/locations')
     const w = mount({ template: '<RouterView />' }, { global: { plugins: [router] } })
     await flushPromises()
-    expect(w.find('.loc__over').exists()).toBe(false)
+    expect(w.find('.page-over').exists()).toBe(false)
     await router.push('/places/zav-bay')
     await flushPromises()
-    expect(w.find('.loc__over .place-page').exists()).toBe(true)
+    expect(w.find('.page-over .place-page').exists()).toBe(true)
     // the very list the player came from, under the page
     expect(w.findAll('.places .place__name').map((n) => n.text())).toContain('Большой театр')
   })

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { stackedName } from '@/app/pageStack'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import FilledIcon from '@/components/ui/FilledIcon.vue'
 import StateBlock from '@/components/ui/StateBlock.vue'
@@ -20,6 +21,8 @@ const props = defineProps<{ id: string }>()
 /** swipe right: back to the list of all locations */
 const swipeBack = useSwipeBack()
 const router = useRouter()
+/** the page this one lies over (the map or the locations list), for links that stay in it */
+const here = useRoute()
 const quests = useAreaQuestsStore()
 const map = useMapStore()
 const walk = useRouteStore()
@@ -134,7 +137,7 @@ onMounted(() => void quests.load())
 
       <section v-if="routes.length" class="pd__routes">
         <h3>Есть в маршрутах</h3>
-        <RouterLink v-for="r in routes" :key="r.id" :to="{ name: 'route', params: { slug: r.slug } }" class="pd__route">
+        <RouterLink v-for="r in routes" :key="r.id" :to="{ name: stackedName(here, 'route'), params: { slug: r.slug } }" class="pd__route">
           {{ r.title }}<AppIcon name="chevron" :size="18" />
         </RouterLink>
       </section>

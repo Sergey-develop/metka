@@ -67,7 +67,17 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/app/layouts/TabLayout.vue'),
     meta: { requiresAuth: true },
     children: [
-      { path: 'map', name: 'map', component: () => import('@/features/map/MapView.vue') },
+      // a place, a building or a quest opened from the map lies over it: the map stays as it was under it
+      {
+        path: 'map',
+        name: 'map',
+        component: () => import('@/features/map/MapView.vue'),
+        children: [
+          { path: 'places/:id', name: 'map-place', component: () => import('@/features/routes/PlaceDetailView.vue'), props: true },
+          { path: 'locations/:id', name: 'map-location', component: () => import('@/features/locations/LocationDetailView.vue'), props: true },
+          { path: 'routes/:slug', name: 'map-route', component: () => import('@/features/routes/RouteDetailView.vue'), props: true },
+        ],
+      },
       // camera-first: which building is in front of the camera (approximate, GPS + compass + OSM); the tab bar stays, as in the mockup
       { path: 'scan', name: 'ar-scan', component: () => import('@/features/scanner/ArScanView.vue') },
       { path: 'results', name: 'results', component: () => import('@/features/results/ResultsView.vue') },
@@ -122,17 +132,17 @@ const routes: RouteRecordRaw[] = [
   { path: '/:pathMatch(.*)*', redirect: '/map' },
 ]
 
-/** the locations list or a place page over it */
-export const overList = (r: RouteLocationNormalized) => r.matched.some((m) => m.name === 'locations')
+/** the tab page a route belongs to (the map, the locations list…): itself, or the page it lies over */
+const tabPage = (r: RouteLocationNormalized) => r.matched[1]
 
 export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
   // a new page opens at its top (it used to keep the previous page's scroll); back restores the position;
-  // a page a sheet expanded into opens at the scroll the sheet had. Between the locations list and a place
-  // over it the window (the list's scroll) is left alone: the place page scrolls by itself
+  // a page a sheet expanded into opens at the scroll the sheet had. Between a tab page and a page over it
+  // (the locations list and a place) the window — the tab page's scroll — is left alone
   scrollBehavior: (to, from, saved) => {
-    if (overList(to) && overList(from)) return false
+    if ((to.matched.length > 2 || from.matched.length > 2) && tabPage(to) === tabPage(from)) return false
     return saved ?? { top: takeHandoffScroll() ?? 0 }
   },
 })

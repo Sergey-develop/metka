@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { parentPath, stackedName } from '@/app/pageStack'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import CoinIcon from '@/components/ui/CoinIcon.vue'
 import FilledIcon from '@/components/ui/FilledIcon.vue'
@@ -17,6 +18,8 @@ const props = defineProps<{ id: string }>()
 /** swipe right: back to the list of all locations */
 const swipeBack = useSwipeBack()
 const router = useRouter()
+/** the page this one lies over (the map or the locations list), for links that stay in it */
+const here = useRoute()
 const map = useMapStore()
 const route = useRouteStore()
 const { buildings, loading, error, load, loadAll, distance, photo, isFavorite, favBusy, toggleFavorite } = usePlaces()
@@ -73,7 +76,7 @@ watch(
 
 function back(): void {
   if (window.history.state?.back) router.back()
-  else void router.push('/locations')
+  else void router.push(parentPath(here) ?? '/locations')
 }
 
 const canShare = typeof navigator !== 'undefined' && (!!navigator.share || !!navigator.clipboard)
@@ -194,7 +197,7 @@ onMounted(loadAll)
           </div>
           <ul class="near">
             <li v-for="n in nearby" :key="n.building.id">
-              <RouterLink :to="{ name: 'location', params: { id: n.building.id } }" class="near__card">
+              <RouterLink :to="{ name: stackedName(here, 'location'), params: { id: n.building.id } }" class="near__card">
                 <span class="near__photo">
                   <img v-if="photo(n.building)" :src="photo(n.building)!" alt="" />
                 </span>

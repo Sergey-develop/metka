@@ -1,5 +1,6 @@
 import { onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { parentPath } from '@/app/pageStack'
 import { markInstant } from '@/app/pageTransition'
 
 /** a drag further than this (or a quick flick) leaves the page */
@@ -20,17 +21,18 @@ function inHorizontalScroller(target: EventTarget | null, root: Element): boolea
 }
 
 /**
- * A location page is swiped to the right to get back to the list of all locations, like iOS: the page
- * follows the finger and a long enough drag (or a flick) slides it out, then the list opens with no
- * animation of its own. Back in history when the list is where the player came from (its scroll is
- * kept), else the list is opened. The page needs touch-action: pan-y: vertical scrolling stays the
- * browser's, which cancels the gesture once it scrolls.
+ * A page is swiped to the right to get back, like iOS: it follows the finger and a long enough drag (or a
+ * flick) slides it out, then the page under it shows with no animation of its own. A page lying over the
+ * map or the locations list goes back to it (in history when it is the previous page, so it keeps its
+ * state); a page of its own goes back in history, else to `fallback`. The page needs touch-action: pan-y:
+ * vertical scrolling stays the browser's, which cancels the gesture once it scrolls.
  *
  * The page is moved by writing its style once per frame, not through Vue state: a reactive offset
  * re-rendered the whole page on every finger move and made it stutter.
  */
-export function useSwipeBack() {
+export function useSwipeBack(fallback = '/locations') {
   const router = useRouter()
+  const here = useRoute()
   let el: HTMLElement | null = null
   let start: { id: number; x: number; y: number; t: number } | null = null
   let active = false
@@ -68,9 +70,13 @@ export function useSwipeBack() {
     settle('out')
     setTimeout(() => {
       markInstant()
+      // back to the page this one lies over (the map, the locations list) — in history when it is the
+      // previous page, so it keeps its state; a page of its own goes back in history
+      const parent = parentPath(here)
       const back = window.history.state?.back
-      if (typeof back === 'string' && back.split('?')[0] === '/locations') router.back()
-      else void router.push('/locations')
+      const prev = typeof back === 'string' ? back.split('?')[0] : null
+      if (parent ? prev === parent : prev !== null) router.back()
+      else void router.push(parent ?? fallback)
     }, OUT_MS)
   }
 
