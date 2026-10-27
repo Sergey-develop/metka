@@ -24,6 +24,70 @@ export const mapCategory = ref<PlaceTag | null>(null)
 
 export const TAG_LABEL = Object.fromEntries(PLACE_CHIPS.map((c) => [c.id, c.label])) as Record<PlaceTag, string>
 
+/** the coloured badge on a location card (mockup Location_Gallery, 2026-10-27) */
+export type PlaceKind = 'fun' | 'nature' | 'history' | 'food' | 'hotel'
+export const KIND_BADGE: Record<PlaceKind, string> = {
+  fun: 'Развлечения',
+  nature: 'Природа',
+  history: 'История',
+  food: 'Ресторан',
+  hotel: 'Отель',
+}
+
+/** kind and the white «type» badge next to it, per place; the mockup's own words where it shows the place */
+const PLACE_BADGES: Record<string, { kind: PlaceKind; type: string }> = {
+  'zav-bay': { kind: 'nature', type: 'Прогулки' },
+  'zav-embankment': { kind: 'nature', type: 'Прогулки' },
+  'zav-bridge': { kind: 'nature', type: 'Прогулки' },
+  'zav-beach': { kind: 'nature', type: 'Отдых' },
+  'zav-sloboda-lake': { kind: 'nature', type: 'Прогулки' },
+  'zav-ant-trail': { kind: 'nature', type: 'Тропа' },
+  'zav-ant-trail-start': { kind: 'nature', type: 'Тропа' },
+  'zav-camping': { kind: 'nature', type: 'Кемпинг' },
+  'zav-tsarevna': { kind: 'food', type: 'Отдых' },
+  'zav-traktir': { kind: 'food', type: 'Отдых' },
+  'zav-syrzavod': { kind: 'food', type: 'Отдых' },
+  'zav-zhukovka': { kind: 'food', type: 'Отдых' },
+  'zav-krym': { kind: 'food', type: 'Отдых' },
+  'zav-barhan': { kind: 'food', type: 'Кафе' },
+  'zav-gastrobar': { kind: 'food', type: 'Бар' },
+  'zav-yacht-club': { kind: 'fun', type: 'Яхт-клуб' },
+  'zav-meridian': { kind: 'fun', type: 'Яхт-клуб' },
+  'zav-river-port': { kind: 'fun', type: 'Речной порт' },
+  'zav-golf': { kind: 'fun', type: 'Гольф-клуб' },
+  'zav-tennis': { kind: 'fun', type: 'Теннис' },
+  'zav-basketball': { kind: 'fun', type: 'Баскетбол' },
+  'zav-football': { kind: 'fun', type: 'Футбол' },
+  'zav-minigolf': { kind: 'fun', type: 'Мини-гольф' },
+  'zav-toboggan': { kind: 'fun', type: 'Тюбинг' },
+  'zav-fishing': { kind: 'fun', type: 'Рыбалка' },
+  'zav-water-rental': { kind: 'fun', type: 'Прокат' },
+  'zav-aqua-spa': { kind: 'fun', type: 'Аквапарк' },
+  'zav-banya': { kind: 'fun', type: 'Баня' },
+  'zav-alpaca': { kind: 'fun', type: 'Парк альпак' },
+  'zav-evrika': { kind: 'fun', type: 'Мастерские' },
+  'zav-tent': { kind: 'fun', type: 'Мероприятия' },
+  'zav-memorial': { kind: 'history', type: 'Памятник' },
+  'zav-radisson': { kind: 'hotel', type: 'Отдых' },
+  'zav-radisson-residences': { kind: 'hotel', type: 'Апартаменты' },
+  'zav-yamskaya': { kind: 'hotel', type: 'Отдых' },
+  'zav-spa-village': { kind: 'hotel', type: 'Спа' },
+}
+
+/** a place not listed above (added later in the database) still gets a kind from its tags */
+function kindFromTags(tags: readonly PlaceTag[]): PlaceKind {
+  if (tags.includes('food')) return 'food'
+  if (tags.includes('culture')) return 'history'
+  if (tags.includes('sport') || tags.includes('kids')) return 'fun'
+  return 'nature'
+}
+
+export function placeBadges(p: AreaPlace): { kind: PlaceKind; label: string; type: string | null } {
+  const known = PLACE_BADGES[p.id]
+  const kind = known?.kind ?? kindFromTags(p.tags)
+  return { kind, label: KIND_BADGE[kind], type: known?.type ?? null }
+}
+
 export const KIND_LABEL: Record<StepKind, string> = {
   checkin: 'Чек-ин',
   photo: 'Фото',

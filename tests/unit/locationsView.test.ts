@@ -162,6 +162,12 @@ describe('LocationsView', () => {
     // the bay card shows its bundled photo and category, and opens the place page
     const bayCard = w.findAll('.place').find((p) => p.find('.place__name').text() === 'zav-bay')!
     expect(bayCard.find('.place__meta').text()).toContain('Природа / вода')
+    // badges over the photo as on the mockup: a coloured kind and a white type; Moscow buildings have none
+    expect(bayCard.findAll('.place__badge').map((b) => b.text())).toEqual(['Природа', 'Прогулки'])
+    expect(bayCard.find('.place__badge--nature').exists()).toBe(true)
+    const traktirCard = w.findAll('.place').find((p) => p.find('.place__name').text() === 'zav-traktir')!
+    expect(traktirCard.findAll('.place__badge').map((b) => b.text())).toEqual(['Ресторан', 'Отдых'])
+    expect(w.findAll('.place')[0]!.find('.place__badges').exists()).toBe(false)
     // «Еда» leaves the one café; a second tap brings everything back
     const food = w.findAll('.cats .cat').find((c) => c.text() === 'Еда')!
     await food.trigger('click')

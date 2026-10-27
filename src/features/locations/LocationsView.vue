@@ -8,7 +8,7 @@ import nearbyArt from '@/assets/locations/nearby.webp'
 import routesArt from '@/assets/locations/routes.webp'
 import twoHoursArt from '@/assets/locations/two-hours.webp'
 import CategoryChips from '@/components/ui/CategoryChips.vue'
-import { hasPoint, PLACE_CHIPS, placeTarget } from '@/features/routes/routes'
+import { hasPoint, PLACE_CHIPS, placeBadges, placeTarget } from '@/features/routes/routes'
 import { useAreaQuestsStore } from '@/stores/areaQuests'
 import type { MapBuilding, PlaceTag } from '@/types/game'
 import { swipeSession as swipe, usePlaces, walkTime as walkTimeFor } from './places'
@@ -27,6 +27,9 @@ const zavCategory = computed(() => new Map(zavCards.value.map((z) => [z.card.id,
 const isZav = (b: MapBuilding) => b.id.startsWith('place:')
 const photo = (b: MapBuilding) => (isZav(b) ? b.imageUrl : buildingPhoto(b))
 const tagOf = (b: MapBuilding) => zavCategory.value.get(b.id) ?? null
+/** kind + type badges over the photo (mockup Location_Gallery); Moscow buildings have none yet */
+const zavBadges = computed(() => new Map(zavCards.value.map((z) => [z.card.id, placeBadges(z.place)])))
+const badgesOf = (b: MapBuilding) => zavBadges.value.get(b.id) ?? null
 
 // «С кем идешь?» does not filter yet: places have no such data
 const RANGE_M: Record<Range, number> = { near: 1000, district: 5000, city: Infinity }
@@ -176,6 +179,10 @@ onMounted(() => {
               <li v-for="b in list" :key="b.id" class="place">
                 <div class="place__photo" role="button" tabindex="0" :aria-label="`${b.name}: подробнее`" @click="openPlace(b)" @keydown.enter="openPlace(b)">
                   <img v-if="photo(b)" :src="photo(b)!" alt="" />
+                  <div v-if="badgesOf(b)" class="place__badges">
+                    <span class="place__badge" :class="`place__badge--${badgesOf(b)!.kind}`">{{ badgesOf(b)!.label }}</span>
+                    <span v-if="badgesOf(b)!.type" class="place__badge">{{ badgesOf(b)!.type }}</span>
+                  </div>
                 </div>
                 <button
                   v-if="b.discoveredAt"
@@ -434,6 +441,41 @@ $card: #f3f3f9;
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+}
+// mockup Location_Gallery: a coloured kind and a white type, top left on the photo
+.place__badges {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 56px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.place__badge {
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: #fff;
+  color: #000;
+  font-size: 13px;
+  line-height: 18px;
+  &--fun {
+    background: #f9b7fd;
+  }
+  &--nature {
+    background: #c5df4f;
+  }
+  &--history {
+    background: #ffe27e;
+  }
+  &--food {
+    background: #ff9447;
+    color: #fff;
+  }
+  &--hotel {
+    background: #8d5ec8;
+    color: #fff;
   }
 }
 .place__fav {
