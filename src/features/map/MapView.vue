@@ -34,6 +34,8 @@ import TasksSheet from './TasksSheet.vue'
 import MemoryEditor from '@/features/album/MemoryEditor.vue'
 import { gameAreaAt, ZAVIDOVO_HOME, type GameAreaId } from '@/utils/gameAreas'
 import { usePlaces } from '@/features/locations/places'
+import { useMapHeading } from '@/features/map/heading'
+import { useSwipeAway } from '@/features/map/swipeAway'
 import { hasPoint, mapCategory, PLACE_CHIPS, placeTarget } from '@/features/routes/routes'
 import { useAreaQuestsStore } from '@/stores/areaQuests'
 
@@ -53,6 +55,10 @@ const cardOpen = computed(() => !!(map.selectedBuilding || map.selectedDistrict 
 const routeCard = computed(() => route.active && !cardOpen.value && !(diagnosticsOpen.value && exploration.enabled))
 /** photo of the destination: own memory or scan first, as on the locations pages */
 const { photo: placePhoto } = usePlaces()
+/** the arrow at the player's dot: where they face */
+const heading = useMapHeading()
+/** the route card is swiped away like the fog hint: that ends the route */
+const routeSwipe = useSwipeAway(() => route.stop())
 /** the clan / tasks sheets over the map (mockups «выдвигается клан», «выдвигаются задания») */
 const sheet = ref<'clan' | 'tasks' | null>(null)
 const router = useRouter()
@@ -108,6 +114,7 @@ const diagnosticsOpen = ref(false)
 
 /** Street level under fog with nothing explored in view: say why the map is grey, offer a way out. */
 const fogHintDismissed = ref(false)
+const hintSwipe = useSwipeAway(() => (fogHintDismissed.value = true))
 const fogHint = computed(() => {
   const v = viewport.value
   if (fogHintDismissed.value || !fogOn.value || !v || v.zoom < STREET_LEVEL_ZOOM || exploration.loadingViewport) return false
@@ -374,6 +381,7 @@ onBeforeUnmount(() => {
       :outlines="outlines.list"
       :buildings-with-outline="outlines.gameIdsWithOutline"
       :position="map.position"
+      :heading="heading"
       :selected-building-id="map.selectedBuildingId"
       :selected-district-id="map.selectedDistrictId"
       :selected-outline-id="selectedOutlineId"
@@ -446,7 +454,13 @@ onBeforeUnmount(() => {
         :class="{ 'chips--beside-buttons': !cardOpen }"
         aria-live="polite"
       >
-        <div v-if="fogHint" class="chip chip--hint" role="status">
+        <div
+          v-if="fogHint"
+          class="chip chip--hint"
+          role="status"
+          :style="hintSwipe.style.value"
+          v-on="hintSwipe.handlers"
+        >
           <span>{{
             showExploredState === 'none'
               ? 'Вы ещё ничего не открыли — пройдитесь, туман рассеется по пути'
@@ -517,7 +531,9 @@ onBeforeUnmount(() => {
         :state="route.state"
         :error-code="route.errorCode"
         :no-location="!map.position && !!map.geoError"
-        @open="router.push(route.returnTo ?? `/locations/${route.target.id}`)"
+        :style="routeSwipe.style.value"
+        v-on="routeSwipe.handlers"
+        @open="routeSwipe.dragged() || router.push(route.returnTo ?? `/locations/${route.target.id}`)"
         @retry="route.retry()"
       />
     </div>
@@ -646,6 +662,8 @@ onBeforeUnmount(() => {
     align-items: center;
     gap: 6px 10px;
     padding-right: 36px;
+    touch-action: none;
+    transition: transform 0.2s var(--ease), opacity 0.2s var(--ease);
     background: var(--c-surface);
     box-shadow: var(--shadow-card);
     border-radius: 16px;

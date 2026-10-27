@@ -85,6 +85,11 @@ const status = computed(() => {
   box-shadow: var(--shadow-card);
   cursor: pointer;
   animation: rise 0.25s var(--ease);
+  // swiped away on the map (useSwipeAway): no page scroll under the finger, a smooth way back
+  touch-action: none;
+  transition:
+    transform 0.2s var(--ease),
+    opacity 0.2s var(--ease);
 }
 .route__photo {
   flex: none;
