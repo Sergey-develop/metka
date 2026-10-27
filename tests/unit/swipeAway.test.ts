@@ -3,9 +3,9 @@ import { useSwipeAway } from '@/features/map/swipeAway'
 
 const at = (x: number, y: number) => ({ pointerId: 1, clientX: x, clientY: y, currentTarget: { setPointerCapture: vi.fn() } }) as unknown as PointerEvent
 
-function gesture(dx: number, dy: number) {
+function gesture(dx: number, dy: number, options?: { down?: boolean }) {
   const onDismiss = vi.fn()
-  const swipe = useSwipeAway(onDismiss)
+  const swipe = useSwipeAway(onDismiss, options)
   swipe.handlers.pointerdown(at(100, 100))
   swipe.handlers.pointermove(at(100 + dx, 100 + dy))
   const style = swipe.style.value
@@ -35,5 +35,14 @@ describe('useSwipeAway', () => {
     expect(short.swipe.dragged()).toBe(true) // its click must not open the place
     expect(short.swipe.style.value).toBeUndefined()
     expect(gesture(0, -200).onDismiss).not.toHaveBeenCalled()
+  })
+
+  it('sideways only (the route card): a drag down neither moves nor dismisses it; sideways still does', () => {
+    const down = gesture(0, 200, { down: false })
+    expect(down.onDismiss).not.toHaveBeenCalled()
+    expect(down.style?.transform ?? 'translate(0px, 0px)').toBe('translate(0px, 0px)')
+    const right = gesture(120, 60, { down: false })
+    expect(right.onDismiss).toHaveBeenCalledOnce()
+    expect(right.style?.transform).toBe('translate(120px, 0px)')
   })
 })

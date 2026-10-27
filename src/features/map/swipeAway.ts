@@ -6,10 +6,11 @@ const SWIPE_DOWN = 40
 const TAP = 8
 
 /**
- * A card at the bottom of the map that is swiped away sideways or down, like a notification.
- * Bind `handlers` and `style` to the card; a tap still reaches the buttons inside it.
+ * A card at the bottom of the map that is swiped away sideways or down, like a notification
+ * (`down: false` — sideways only). Bind `handlers` and `style` to the card; a tap still reaches the
+ * buttons inside it.
  */
-export function useSwipeAway(onDismiss: () => void) {
+export function useSwipeAway(onDismiss: () => void, { down = true }: { down?: boolean } = {}) {
   const drag = ref<{ id: number; x: number; y: number; dx: number; dy: number } | null>(null)
   let moved = false
 
@@ -22,7 +23,7 @@ export function useSwipeAway(onDismiss: () => void) {
       const d = drag.value
       if (!d || e.pointerId !== d.id) return
       d.dx = e.clientX - d.x
-      d.dy = Math.max(0, e.clientY - d.y)
+      d.dy = down ? Math.max(0, e.clientY - d.y) : 0
       // captured only once it is a drag, so a tap still lands on the button under the finger
       if (!moved && Math.hypot(d.dx, d.dy) > TAP) {
         moved = true

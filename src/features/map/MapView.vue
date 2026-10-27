@@ -58,8 +58,8 @@ const routeCard = computed(() => route.active && !cardOpen.value && !(diagnostic
 const { photo: placePhoto } = usePlaces()
 /** the arrow at the player's dot: where they face */
 const heading = useMapHeading()
-/** the route card is swiped away like the fog hint: that ends the route */
-const routeSwipe = useSwipeAway(() => route.stop())
+/** the route card is swiped away sideways only (the fog hint also down): that ends the route */
+const routeSwipe = useSwipeAway(() => route.stop(), { down: false })
 /**
  * The clan and tasks buttons stand 10px above the route card. The card is 105px on the mockup but grows
  * with a long status (an error on three lines and «Повторить»), so its real height is measured.
