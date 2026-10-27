@@ -8,9 +8,9 @@ import nearbyArt from '@/assets/locations/nearby.webp'
 import twoHoursArt from '@/assets/locations/two-hours.webp'
 import CategoryChips from '@/components/ui/CategoryChips.vue'
 import PageOverlay from '@/components/ui/PageOverlay.vue'
-import { hasPoint, PLACE_CHIPS, placeBadges, placeTarget } from '@/features/routes/routes'
+import { hasPoint, PLACE_CHIPS, placeBadges, placeTarget, type PlaceKind } from '@/features/routes/routes'
 import { useAreaQuestsStore } from '@/stores/areaQuests'
-import type { MapBuilding, PlaceTag } from '@/types/game'
+import type { MapBuilding } from '@/types/game'
 import { swipeSession as swipe, usePlaces, walkTime as walkTimeFor } from './places'
 import SwipeDeck from './SwipeDeck.vue'
 import SwipeSetup, { type Range } from './SwipeSetup.vue'
@@ -55,12 +55,11 @@ function restartSwipe(): void {
 }
 
 /**
- * The category chips of the map and the places tab. Only Zavidovo places have categories
- * (area_places.tags); Moscow buildings have none yet, so a chosen category shows Zavidovo places.
+ * The tag chips (Теги.png): a chosen tag shows the places whose card has that badge. Only Zavidovo
+ * places have one; Moscow buildings have none yet, so a chosen tag shows Zavidovo places.
  */
-const category = ref<PlaceTag | null>(null)
-const zavTags = computed(() => new Map(zavCards.value.map((z) => [z.card.id, z.place.tags])))
-const inCategory = (b: MapBuilding) => !category.value || (zavTags.value.get(b.id)?.includes(category.value) ?? false)
+const category = ref<PlaceKind | null>(null)
+const inCategory = (b: MapBuilding) => !category.value || badgesOf(b)?.kind === category.value
 
 /** Moscow buildings and Zavidovo places in one list: discovered first, then the nearest */
 const list = computed(() =>
@@ -494,6 +493,10 @@ $card: #f3f3f9;
   }
   &--hotel {
     background: #8d5ec8;
+    color: #fff;
+  }
+  &--sport {
+    background: #0189ff;
     color: #fff;
   }
 }

@@ -95,7 +95,8 @@ describe('LocationsView', () => {
   it('lists discovered places first; every photo is shown as is, without blur or lock', async () => {
     const { w } = await mountView()
     // the category chips of the map; the active tab of the switch is black
-    expect(w.findAll('.cats .cat').map((c) => c.text())).toEqual(['Спорт', 'Культура', 'С детьми', 'Бесплатно', 'Еда', 'Отдых'])
+    // the place tags of Теги.png
+    expect(w.findAll('.cats .cat').map((c) => c.text())).toEqual(['Развлечения', 'Природа', 'История', 'Спорт', 'Рестораны', 'Отели'])
     expect(w.find('[role="tab"][aria-selected="true"]').classes()).toContain('on')
     const places = w.findAll('.place')
     expect(places).toHaveLength(3)
@@ -221,7 +222,7 @@ describe('LocationsView', () => {
     expect(traktirCard.findAll('.place__badge').map((b) => b.text())).toEqual(['Ресторан', 'Отдых'])
     expect(w.findAll('.place')[0]!.find('.place__badges').exists()).toBe(false)
     // «Еда» leaves the one café; a second tap brings everything back
-    const food = w.findAll('.cats .cat').find((c) => c.text() === 'Еда')!
+    const food = w.findAll('.cats .cat').find((c) => c.text() === 'Рестораны')!
     await food.trigger('click')
     expect(w.findAll('.places .place__name').map((n) => n.text())).toEqual(['zav-traktir'])
     await food.trigger('click')

@@ -37,7 +37,7 @@ import { gameAreaAt, ZAVIDOVO_HOME, type GameAreaId } from '@/utils/gameAreas'
 import { usePlaces } from '@/features/locations/places'
 import { useMapHeading } from '@/features/map/heading'
 import { useSwipeAway } from '@/features/map/swipeAway'
-import { hasPoint, mapCategory, PLACE_CHIPS, placeTarget } from '@/features/routes/routes'
+import { hasPoint, mapCategory, ofKind, PLACE_CHIPS, placeTarget } from '@/features/routes/routes'
 import { useAreaQuestsStore } from '@/stores/areaQuests'
 
 const map = useMapStore()
@@ -260,12 +260,12 @@ const questPoints = computed(() => {
   }
   return [...points.values()]
 })
-/** a category chip shows only the places of that category (Zavidovo, migration 027) instead of everything else */
+/** a tag chip (Теги.png) shows only the places of that kind (Zavidovo) instead of everything else */
 const categoryPoints = computed(() => {
-  const tag = mapCategory.value
-  if (!tag) return []
+  const kind = mapCategory.value
+  if (!kind) return []
   return (quests.data?.places ?? [])
-    .filter((p) => p.tags.includes(tag))
+    .filter((p) => ofKind(p, kind))
     .filter(hasPoint)
     .map((p) => ({ ...placeTarget(p), rarity: 'epic' as const }))
 })

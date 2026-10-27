@@ -6,6 +6,7 @@ import PlayerAvatar from '@/components/ui/PlayerAvatar.vue'
 import WalletStreak from '@/components/ui/WalletStreak.vue'
 import { levelProgress } from '@/features/progression/levels'
 import { daysText, plural } from '@/utils/plural'
+import { PLACE_CHIPS } from '@/features/routes/routes'
 
 describe('PlayerAvatar', () => {
   it('photo first, then the preset figure, then the initials', () => {
@@ -40,10 +41,17 @@ describe('WalletStreak', () => {
 })
 
 describe('CategoryChips', () => {
-  it('the four categories of the mockups, inactive for now', () => {
-    const chips = mount(CategoryChips).findAll('button')
-    expect(chips.map((c) => c.text())).toEqual(['Спорт', 'Культура', 'С детьми', 'Бесплатно'])
-    expect(chips.every((c) => c.attributes('disabled') !== undefined)).toBe(true)
+  it('the place tags of Теги.png: colour and icon per tag; a tap chooses, a second tap clears', async () => {
+    const w = mount(CategoryChips, { props: { items: PLACE_CHIPS, modelValue: null } })
+    const chips = w.findAll('button')
+    expect(chips.map((c) => c.text())).toEqual(['Развлечения', 'Природа', 'История', 'Спорт', 'Рестораны', 'Отели'])
+    expect(chips.map((c) => c.classes().find((k) => k.startsWith('cat--')))).toEqual(['cat--fun', 'cat--nature', 'cat--history', 'cat--sport', 'cat--food', 'cat--hotel'])
+    expect(chips.every((c) => c.find('svg').exists())).toBe(true)
+    await chips[4]!.trigger('click')
+    expect(w.emitted('update:modelValue')![0]).toEqual(['food'])
+    await w.setProps({ modelValue: 'food' })
+    await w.findAll('button')[4]!.trigger('click')
+    expect(w.emitted('update:modelValue')![1]).toEqual([null])
   })
 })
 

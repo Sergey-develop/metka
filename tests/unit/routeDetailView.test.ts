@@ -213,7 +213,7 @@ describe('RoutesView', () => {
   it('a category chip leaves only its places', async () => {
     const { w } = await mountAt('/routes', RoutesView)
     await w.findAll('.zr__tabs button')[1]!.trigger('click')
-    const food = w.findAll('.zr__cats button').find((b) => b.text() === 'Еда')!
+    const food = w.findAll('.zr__cats button').find((b) => b.text() === 'Рестораны')!
     await food.trigger('click')
     expect(w.findAll('.pl__name').map((n) => n.text())).toEqual(['«Трактиръ»'])
     expect(w.find('.zr__zone h2').text()).toBe('Ещё на курорте')
@@ -226,7 +226,9 @@ describe('PlaceDetailView', () => {
   it('shows the categories, contacts and the routes through the place', async () => {
     const { w } = await mountAt('/places/zav-traktir', PlaceDetailView, { id: 'zav-traktir' })
     expect(w.find('.pd__name').text()).toBe('«Трактиръ»')
-    expect(w.findAll('.pd__tag').map((t) => t.text())).toEqual(['Еда'])
+    // the same badges as on its card: the tag and the type
+    expect(w.findAll('.pd__tag').map((t) => t.text())).toEqual(['Ресторан', 'Отдых'])
+    expect(w.find('.pd__tag--food').exists()).toBe(true)
     expect(w.find('.pd__info').text()).toContain('пт–сб 09:00–23:00')
     expect(w.find('a[href="tel:+79038067997"]').exists()).toBe(true)
     expect(w.find('a[href="https://yatraktir.ru"]').text()).toBe('yatraktir.ru')

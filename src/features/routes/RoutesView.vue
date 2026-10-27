@@ -8,10 +8,10 @@ import StateBlock from '@/components/ui/StateBlock.vue'
 import { useAreaQuestsStore } from '@/stores/areaQuests'
 import { useMapStore } from '@/stores/map'
 import { useRouteStore } from '@/stores/route'
-import { PLACE_ZONES, type AreaPlace, type PlaceTag } from '@/types/game'
+import { PLACE_ZONES, type AreaPlace } from '@/types/game'
 import { distanceMeters, formatDistance } from '@/utils/geo'
 import { placePhoto, routePhoto } from './photos'
-import { doneCount, hasPoint, PLACE_CHIPS, placeTarget, ZONE_TITLE } from './routes'
+import { doneCount, hasPoint, ofKind, PLACE_CHIPS, placeTarget, ZONE_TITLE, type PlaceKind } from './routes'
 
 /**
  * Zavidovo (content plan of 2026-10-27): quest routes, the base of places by zone and the artifact
@@ -30,11 +30,11 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'artifacts', label: 'Артефакты' },
 ]
 
-const category = ref<PlaceTag | null>(null)
+const category = ref<PlaceKind | null>(null)
 const zones = computed(() =>
   PLACE_ZONES.map((zone) => ({
     zone,
-    places: (quests.data?.places ?? []).filter((p) => p.zone === zone && (!category.value || p.tags.includes(category.value))),
+    places: (quests.data?.places ?? []).filter((p) => p.zone === zone && ofKind(p, category.value)),
   })).filter(
     (z) => z.places.length > 0,
   ),
@@ -45,7 +45,7 @@ const nearby = computed(() => {
   const at = map.position
   if (!at) return []
   return (quests.data?.places ?? [])
-    .filter((p) => hasPoint(p) && !quests.visited.has(p.id) && (!category.value || p.tags.includes(category.value)))
+    .filter((p) => hasPoint(p) && !quests.visited.has(p.id) && ofKind(p, category.value))
     .map((p) => ({ place: p, meters: distanceMeters(at, p as AreaPlace & { lat: number; lng: number }) }))
     .filter((x) => x.meters <= NEARBY_MAX_M)
     .sort((a, b) => a.meters - b.meters)

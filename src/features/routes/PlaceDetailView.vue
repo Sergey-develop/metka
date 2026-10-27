@@ -13,7 +13,7 @@ import { useRouteStore } from '@/stores/route'
 import { distanceMeters, formatDistance } from '@/utils/geo'
 import { message, rewardLines } from './outcome'
 import { photoCredit, placePhoto } from './photos'
-import { hasPoint, placeTarget, TAG_LABEL } from './routes'
+import { hasPoint, placeBadges, placeTarget } from './routes'
 import { useSwipeBack } from '@/features/locations/swipeBack'
 
 /** A place of Zavidovo (area_places): photo, what it is, contacts, the way there and the routes through it. */
@@ -28,6 +28,8 @@ const map = useMapStore()
 const walk = useRouteStore()
 
 const place = computed(() => quests.data?.places.find((p) => p.id === props.id) ?? null)
+/** its tag and type, the same badges as on its card */
+const badges = computed(() => (place.value ? placeBadges(place.value) : null))
 const routes = computed(() => quests.routes.filter((r) => r.steps.some((s) => s.place?.id === props.id)))
 const distance = computed(() =>
   map.position && place.value && hasPoint(place.value) ? formatDistance(distanceMeters(map.position, place.value)) : null,
@@ -86,7 +88,8 @@ onMounted(() => void quests.load())
         </figcaption>
       </figure>
       <p class="pd__tags">
-        <span v-for="t in place.tags" :key="t" class="pd__tag" :class="`pd__tag--${t}`">{{ TAG_LABEL[t] }}</span>
+        <span class="pd__tag" :class="`pd__tag--${badges!.kind}`">{{ badges!.label }}</span>
+        <span v-if="badges!.type" class="pd__tag">{{ badges!.type }}</span>
         <span v-if="place.isPartner" class="pd__tag pd__tag--partner">Партнёр</span>
       </p>
       <h2 class="pd__name">{{ place.name }}</h2>
@@ -213,25 +216,31 @@ $card: #f3f3f9;
   font-size: 12px;
   font-weight: 500;
   color: #3c3c43;
+  // the tag of the place (Теги.png), as on its card
+  &--fun {
+    background: #f9b7fd;
+    color: #000;
+  }
+  &--nature {
+    background: #c5df4f;
+    color: #000;
+  }
+  &--history,
+  &--partner {
+    background: #ffe27e;
+    color: #000;
+  }
   &--sport {
     background: $blue;
     color: #fff;
   }
-  &--culture {
-    background: #f9b7fd;
+  &--food {
+    background: #ff9447;
+    color: #fff;
   }
-  &--kids {
-    background: #fdf0cf;
-  }
-  &--free {
-    background: #fdcfcd;
-  }
-  &--food,
-  &--partner {
-    background: #ffe27e;
-  }
-  &--rest {
-    background: #c9f0dc;
+  &--hotel {
+    background: #8d5ec8;
+    color: #fff;
   }
 }
 .pd__name {

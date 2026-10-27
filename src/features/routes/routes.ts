@@ -10,29 +10,33 @@ export const ZONE_TITLE: Record<PlaceZone, string> = {
   resort: 'Ещё на курорте',
 }
 
-/** the category chips of the map and the places list (area_places.tags, migration 027) */
-export const PLACE_CHIPS: (ChipItem & { id: PlaceTag })[] = [
-  { id: 'sport', label: 'Спорт', tone: 'sport', icon: 'runner' },
-  { id: 'culture', label: 'Культура', tone: 'culture', icon: 'cap' },
-  { id: 'kids', label: 'С детьми', tone: 'kids', icon: 'people' },
-  { id: 'free', label: 'Бесплатно', tone: 'free' },
-  { id: 'food', label: 'Еда', tone: 'food' },
-  { id: 'rest', label: 'Отдых', tone: 'rest' },
-]
-/** the category chosen on the map: kept for the app session, so it survives a visit to a place page */
-export const mapCategory = ref<PlaceTag | null>(null)
 
-export const TAG_LABEL = Object.fromEntries(PLACE_CHIPS.map((c) => [c.id, c.label])) as Record<PlaceTag, string>
-
-/** the coloured badge on a location card (mockup Location_Gallery, 2026-10-27) */
-export type PlaceKind = 'fun' | 'nature' | 'history' | 'food' | 'hotel'
+/**
+ * The place tags (mockup Теги.png, 2026-10-28): the coloured badge on a place card (mockup
+ * Location_Gallery) and the category chips of the map, the locations and the places list — one kind per
+ * place, so a chip shows exactly the places whose card has that badge.
+ */
+export type PlaceKind = 'fun' | 'nature' | 'history' | 'sport' | 'food' | 'hotel'
+/** on a card: one place */
 export const KIND_BADGE: Record<PlaceKind, string> = {
   fun: 'Развлечения',
   nature: 'Природа',
   history: 'История',
+  sport: 'Спорт',
   food: 'Ресторан',
   hotel: 'Отель',
 }
+/** the chips, in the order of Теги.png */
+export const PLACE_CHIPS: (ChipItem & { id: PlaceKind })[] = [
+  { id: 'fun', label: 'Развлечения', tone: 'fun', icon: true },
+  { id: 'nature', label: 'Природа', tone: 'nature', icon: true },
+  { id: 'history', label: 'История', tone: 'history', icon: true },
+  { id: 'sport', label: 'Спорт', tone: 'sport', icon: true },
+  { id: 'food', label: 'Рестораны', tone: 'food', icon: true },
+  { id: 'hotel', label: 'Отели', tone: 'hotel', icon: true },
+]
+/** the category chosen on the map: kept for the app session, so it survives a visit to a place page */
+export const mapCategory = ref<PlaceKind | null>(null)
 
 /** kind and the white «type» badge next to it, per place; the mockup's own words where it shows the place */
 const PLACE_BADGES: Record<string, { kind: PlaceKind; type: string }> = {
@@ -54,14 +58,14 @@ const PLACE_BADGES: Record<string, { kind: PlaceKind; type: string }> = {
   'zav-yacht-club': { kind: 'fun', type: 'Яхт-клуб' },
   'zav-meridian': { kind: 'fun', type: 'Яхт-клуб' },
   'zav-river-port': { kind: 'fun', type: 'Речной порт' },
-  'zav-golf': { kind: 'fun', type: 'Гольф-клуб' },
-  'zav-tennis': { kind: 'fun', type: 'Теннис' },
-  'zav-basketball': { kind: 'fun', type: 'Баскетбол' },
-  'zav-football': { kind: 'fun', type: 'Футбол' },
-  'zav-minigolf': { kind: 'fun', type: 'Мини-гольф' },
-  'zav-toboggan': { kind: 'fun', type: 'Тюбинг' },
-  'zav-fishing': { kind: 'fun', type: 'Рыбалка' },
-  'zav-water-rental': { kind: 'fun', type: 'Прокат' },
+  'zav-golf': { kind: 'sport', type: 'Гольф-клуб' },
+  'zav-tennis': { kind: 'sport', type: 'Теннис' },
+  'zav-basketball': { kind: 'sport', type: 'Баскетбол' },
+  'zav-football': { kind: 'sport', type: 'Футбол' },
+  'zav-minigolf': { kind: 'sport', type: 'Мини-гольф' },
+  'zav-toboggan': { kind: 'sport', type: 'Тюбинг' },
+  'zav-fishing': { kind: 'sport', type: 'Рыбалка' },
+  'zav-water-rental': { kind: 'sport', type: 'Прокат' },
   'zav-aqua-spa': { kind: 'fun', type: 'Аквапарк' },
   'zav-banya': { kind: 'fun', type: 'Баня' },
   'zav-alpaca': { kind: 'fun', type: 'Парк альпак' },
@@ -78,9 +82,13 @@ const PLACE_BADGES: Record<string, { kind: PlaceKind; type: string }> = {
 function kindFromTags(tags: readonly PlaceTag[]): PlaceKind {
   if (tags.includes('food')) return 'food'
   if (tags.includes('culture')) return 'history'
-  if (tags.includes('sport') || tags.includes('kids')) return 'fun'
+  if (tags.includes('sport')) return 'sport'
+  if (tags.includes('kids')) return 'fun'
   return 'nature'
 }
+
+/** whether the place is of the chosen kind (no kind chosen: every place) */
+export const ofKind = (p: AreaPlace, kind: PlaceKind | null) => !kind || placeBadges(p).kind === kind
 
 export function placeBadges(p: AreaPlace): { kind: PlaceKind; label: string; type: string | null } {
   const known = PLACE_BADGES[p.id]

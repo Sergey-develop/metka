@@ -1,11 +1,12 @@
 <script lang="ts">
-export type ChipTone = 'sport' | 'culture' | 'kids' | 'free' | 'food' | 'rest'
-export type ChipIcon = 'runner' | 'cap' | 'people'
+/** the place tags (mockup Теги.png, 2026-10-28) and, without icons, the event types (иветы.png) */
+export type ChipTone = 'fun' | 'nature' | 'history' | 'sport' | 'food' | 'hotel' | 'culture' | 'kids' | 'free'
 export interface ChipItem {
   id: string
   label: string
   tone: ChipTone
-  icon?: ChipIcon
+  /** draw the tag's icon (the place tags have one) */
+  icon?: boolean
 }
 </script>
 
@@ -13,24 +14,29 @@ export interface ChipItem {
 import FilledIcon from './FilledIcon.vue'
 
 /**
- * Category chips of the mockups (иветы.png, карта.jpg), scrolling off the right edge.
- * Without `items`: Спорт · Культура · С детьми · Бесплатно, inactive (the map has no categories yet).
- * With `items`: a working single-choice filter (v-model = the chosen id, null — none; a second tap
- * on the chosen chip clears it); `tone` picks one of the four colours.
+ * Category chips (mockups Теги.png, карта.jpg), scrolling off the right edge: a single-choice filter
+ * (v-model = the chosen id, null — none; a second tap on the chosen chip clears it).
  */
-defineProps<{ items?: ChipItem[]; modelValue?: string | null }>()
+defineProps<{ items: ChipItem[]; modelValue?: string | null }>()
 const emit = defineEmits<{ 'update:modelValue': [id: string | null] }>()
 
-const CATEGORIES: { id: ChipTone; label: string; icon: 'runner' | 'cap' | 'people' | null }[] = [
-  { id: 'sport', label: 'Спорт', icon: 'runner' },
-  { id: 'culture', label: 'Культура', icon: 'cap' },
-  { id: 'kids', label: 'С детьми', icon: 'people' },
-  { id: 'free', label: 'Бесплатно', icon: null },
-]
+/** 24×24 icons drawn after the mockup; sport uses the runner of the tab bar */
+const ICON: Partial<Record<ChipTone, string>> = {
+  // a ticket
+  fun: 'M3.6 8.3 15.8 3.9a1 1 0 0 1 1.3.6l.8 2.2a2 2 0 0 0-1.3 2.6 2 2 0 0 0 2.5 1.2l.8 2.2a1 1 0 0 1-.6 1.3L7.1 18.4a1 1 0 0 1-1.3-.6L5 15.6a2 2 0 0 0 1.3-2.6 2 2 0 0 0-2.5-1.2L3 9.6a1 1 0 0 1 .6-1.3Zm6.2 1.6-.8.3.4 1-1 .3.3.8 1-.3.3 1 .8-.3-.3-1 1-.4-.3-.8-1 .4-.4-1Zm3 .8.7 2 .9-.3-.7-2-.9.3ZM21 19H7l13-4.7V18a1 1 0 0 1-1 1Z',
+  // a tree
+  nature: 'M12 2a5 5 0 0 1 4.9 4.1A4.5 4.5 0 0 1 16.5 15H13v5h2.5v2h-7v-2H11v-5H7.5a4.5 4.5 0 0 1-.4-8.9A5 5 0 0 1 12 2Z',
+  // a museum
+  history: 'M12 2 2.5 6.8V9h19V6.8L12 2ZM4.5 10.5v7h2.5v-7H4.5Zm4.7 0v7h2.5v-7H9.2Zm3.1 0v7h2.5v-7h-2.5Zm4.7 0v7h2.5v-7H17ZM2.5 19v2.5h19V19h-19Z',
+  // a fork and a knife
+  food: 'M6.5 2v6.5a2.5 2.5 0 0 0 2 2.45V22h2V10.95a2.5 2.5 0 0 0 2-2.45V2H11v5.5h-1V2H9v5.5H8V2H6.5Zm10 0C14.6 2 13.5 4.3 13.5 7.5V13H16v9h2V2h-1.5Z',
+  // a hotel building
+  hotel: 'M4.5 2h15v20h-5.5v-4h-4v4H4.5V2Zm3 3v2.5H10V5H7.5Zm6.5 0v2.5h2.5V5H14ZM7.5 9.5V12H10V9.5H7.5Zm6.5 0V12h2.5V9.5H14ZM7.5 14v2.5H10V14H7.5Zm6.5 0v2.5h2.5V14H14Z',
+}
 </script>
 
 <template>
-  <div v-if="items" class="cats" role="group" aria-label="Категории">
+  <div class="cats" role="group" aria-label="Категории">
     <button
       v-for="c in items"
       :key="c.id"
@@ -40,25 +46,10 @@ const CATEGORIES: { id: ChipTone; label: string; icon: 'runner' | 'cap' | 'peopl
       :aria-pressed="modelValue === c.id"
       @click="emit('update:modelValue', modelValue === c.id ? null : c.id)"
     >
-      <FilledIcon v-if="c.icon === 'runner'" name="runner" :size="18" />
-      <svg v-else-if="c.icon === 'cap'" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-        <path fill="currentColor" d="M11.5 4.2a1.2 1.2 0 0 1 1 0l9 4.2a.7.7 0 0 1 0 1.2l-9 4.3a1.2 1.2 0 0 1-1 0l-9-4.3a.7.7 0 0 1 0-1.2l9-4.2ZM6 12.6l5.5 2.6a1.2 1.2 0 0 0 1 0l5.5-2.6v3.6c0 1.6-2.7 3.3-6 3.3s-6-1.7-6-3.3v-3.6Z" />
-      </svg>
-      <svg v-else-if="c.icon === 'people'" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-        <path fill="currentColor" d="M9 4.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Zm7.5 2a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6ZM9 13c3.6 0 6 1.7 6 4v1.2c0 .5-.4.8-.8.8H3.8a.8.8 0 0 1-.8-.8V17c0-2.3 2.4-4 6-4Zm7.5.4c2.6.1 4.5 1.4 4.5 3.3v1.5c0 .4-.4.8-.8.8H16.6c.2-.3.4-.6.4-1V17c0-1.4-.5-2.6-1.5-3.6h1Z" />
-      </svg>
-      {{ c.label }}
-    </button>
-  </div>
-  <div v-else class="cats" role="group" aria-label="Категории">
-    <button v-for="c in CATEGORIES" :key="c.id" class="cat" :class="`cat--${c.id}`" disabled>
-      <FilledIcon v-if="c.icon === 'runner'" name="runner" :size="18" />
-      <svg v-else-if="c.icon === 'cap'" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-        <path fill="currentColor" d="M11.5 4.2a1.2 1.2 0 0 1 1 0l9 4.2a.7.7 0 0 1 0 1.2l-9 4.3a1.2 1.2 0 0 1-1 0l-9-4.3a.7.7 0 0 1 0-1.2l9-4.2ZM6 12.6l5.5 2.6a1.2 1.2 0 0 0 1 0l5.5-2.6v3.6c0 1.6-2.7 3.3-6 3.3s-6-1.7-6-3.3v-3.6Z" />
-      </svg>
-      <svg v-else-if="c.icon === 'people'" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-        <path fill="currentColor" d="M9 4.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Zm7.5 2a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6ZM9 13c3.6 0 6 1.7 6 4v1.2c0 .5-.4.8-.8.8H3.8a.8.8 0 0 1-.8-.8V17c0-2.3 2.4-4 6-4Zm7.5.4c2.6.1 4.5 1.4 4.5 3.3v1.5c0 .4-.4.8-.8.8H16.6c.2-.3.4-.6.4-1V17c0-1.4-.5-2.6-1.5-3.6h1Z" />
-      </svg>
+      <template v-if="c.icon">
+        <FilledIcon v-if="c.tone === 'sport'" name="runner" :size="18" />
+        <svg v-else-if="ICON[c.tone]" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" :d="ICON[c.tone]" /></svg>
+      </template>
       {{ c.label }}
     </button>
   </div>
@@ -94,10 +85,7 @@ const CATEGORIES: { id: ChipTone; label: string; icon: 'runner' | 'cap' | 'peopl
   transition:
     opacity 0.2s var(--ease),
     transform 0.15s var(--ease);
-  &:disabled {
-    opacity: 1;
-  }
-  &:active:not(:disabled) {
+  &:active {
     transform: scale(0.96);
   }
   // another chip is chosen
@@ -107,10 +95,32 @@ const CATEGORIES: { id: ChipTone; label: string; icon: 'runner' | 'cap' | 'peopl
   &[aria-pressed='true'] {
     box-shadow: inset 0 0 0 2px rgb(0 0 0 / 18%);
   }
+  // colours sampled from Теги.png; the same as the kind badges on the place cards
+  &--fun {
+    background: #f9b7fd;
+    color: #000;
+  }
+  &--nature {
+    background: #c5df4f;
+    color: #000;
+  }
+  &--history {
+    background: #ffe27e;
+    color: #000;
+  }
   &--sport {
     background: #0189ff;
     color: #fff;
   }
+  &--food {
+    background: #ff9447;
+    color: #fff;
+  }
+  &--hotel {
+    background: #8d5ec8;
+    color: #fff;
+  }
+  // event types
   &--culture {
     background: #f9b7fd;
     color: #2a1630;
@@ -122,14 +132,6 @@ const CATEGORIES: { id: ChipTone; label: string; icon: 'runner' | 'cap' | 'peopl
   &--free {
     background: #fdcfcd;
     color: #301312;
-  }
-  &--food {
-    background: #ffe27e;
-    color: #2b2410;
-  }
-  &--rest {
-    background: #c9f0dc;
-    color: #0f2a1c;
   }
 }
 </style>
