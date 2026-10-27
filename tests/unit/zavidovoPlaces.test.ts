@@ -146,4 +146,15 @@ describe('RoutesView extras', () => {
     // the visited place is marked in the list
     expect(w.findAll('.pl__visited')).toHaveLength(1)
   })
+
+  it('a Commons photo carries its author and licence; a typical one says so', async () => {
+    api().getAreaQuests = vi.fn(async () => ({ ...structuredClone(QUESTS), places: [...PLACES, place('zav-memorial', 56.59299, 36.53194, ['culture'])] }))
+    const memorial = await mountAt('/places/zav-memorial', PlaceDetailView, { id: 'zav-memorial' })
+    expect(memorial.find('.pd__credit').text()).toBe('Kohomologie, CC BY-SA 4.0')
+    const alpaca = await mountAt('/places/zav-alpaca', PlaceDetailView, { id: 'zav-alpaca' })
+    expect(alpaca.find('.pd__credit').text()).toContain('Фото для примера')
+    const bay = await mountAt('/places/zav-bay', PlaceDetailView, { id: 'zav-bay' })
+    expect(bay.find('.pd__cover').exists()).toBe(true)
+    expect(bay.find('.pd__credit').exists()).toBe(false)
+  })
 })

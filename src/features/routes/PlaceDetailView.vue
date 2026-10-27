@@ -11,7 +11,7 @@ import { useMapStore } from '@/stores/map'
 import { useRouteStore } from '@/stores/route'
 import { distanceMeters, formatDistance } from '@/utils/geo'
 import { message, rewardLines } from './outcome'
-import { placePhoto } from './photos'
+import { photoCredit, placePhoto } from './photos'
 import { hasPoint, placeTarget, TAG_LABEL } from './routes'
 
 /** A place of Zavidovo (area_places): photo, what it is, contacts, the way there and the routes through it. */
@@ -72,7 +72,13 @@ onMounted(() => void quests.load())
     <StateBlock v-else-if="!place" kind="empty" title="Место не найдено" action-label="Все места" @action="router.replace('/routes')" />
 
     <template v-else>
-      <img v-if="placePhoto(place)" class="pd__cover" :src="placePhoto(place)!" alt="" />
+      <figure v-if="placePhoto(place)" class="pd__figure">
+        <img class="pd__cover" :src="placePhoto(place)!" alt="" />
+        <figcaption v-if="photoCredit(place)" class="pd__credit">
+          <template v-if="photoCredit(place)!.example">Фото для примера · </template>
+          <a :href="photoCredit(place)!.url" target="_blank" rel="noopener noreferrer">{{ photoCredit(place)!.author }}</a>, {{ photoCredit(place)!.license }}
+        </figcaption>
+      </figure>
       <p class="pd__tags">
         <span v-for="t in place.tags" :key="t" class="pd__tag" :class="`pd__tag--${t}`">{{ TAG_LABEL[t] }}</span>
         <span v-if="place.isPartner" class="pd__tag pd__tag--partner">Партнёр</span>
@@ -169,11 +175,21 @@ $card: #f3f3f9;
   background: #eeeef0;
   color: #000;
 }
+.pd__figure {
+  margin: 0 0 14px;
+}
+.pd__credit {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #8e8e93;
+  a {
+    color: inherit;
+  }
+}
 .pd__cover {
   display: block;
   width: 100%;
   height: 220px;
-  margin-bottom: 14px;
   border-radius: 16px;
   object-fit: cover;
 }
