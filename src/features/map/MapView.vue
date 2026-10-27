@@ -107,9 +107,10 @@ const fogOn = computed(() => !(isAdmin.value && fogLifted.value))
 const diagnosticsOpen = ref(false)
 
 /** Street level under fog with nothing explored in view: say why the map is grey, offer a way out. */
+const fogHintDismissed = ref(false)
 const fogHint = computed(() => {
   const v = viewport.value
-  if (!fogOn.value || !v || v.zoom < STREET_LEVEL_ZOOM || exploration.loadingViewport) return false
+  if (fogHintDismissed.value || !fogOn.value || !v || v.zoom < STREET_LEVEL_ZOOM || exploration.loadingViewport) return false
   if (cardOpen.value || route.active || diagnosticsOpen.value) return false
   return !exploration.anyExploredIn(v.bbox)
 })
@@ -456,6 +457,11 @@ onBeforeUnmount(() => {
           <button v-if="showExploredState !== 'none'" type="button" :disabled="showExploredState === 'loading'" @click="showExplored">
             {{ showExploredState === 'loading' ? 'Ищем…' : showExploredState === 'error' ? 'Повторить' : 'Показать открытое' }}
           </button>
+          <button type="button" class="chip__close" aria-label="Закрыть подсказку" @click="fogHintDismissed = true">
+            <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" d="M6 6l12 12M18 6 6 18" />
+            </svg>
+          </button>
         </div>
         <button v-if="map.error || outlines.error" class="chip chip--error" @click="retry">
           {{ (map.error ?? outlines.error)?.code === 'offline' ? 'Нет сети' : 'Ошибка загрузки' }} · повторить
@@ -634,10 +640,12 @@ onBeforeUnmount(() => {
     color: #7a4d00;
   }
   &--hint {
+    position: relative;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 10px;
+    padding-right: 36px;
     background: var(--c-surface);
     box-shadow: var(--shadow-card);
     border-radius: 16px;
@@ -649,6 +657,18 @@ onBeforeUnmount(() => {
       color: #fff;
       font-size: 13px;
       font-weight: 600;
+    }
+    .chip__close {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      background: transparent;
+      color: var(--c-text-2);
     }
   }
 }
