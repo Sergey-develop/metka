@@ -76,6 +76,8 @@ const routes: RouteRecordRaw[] = [
           { path: 'places/:id', name: 'map-place', component: () => import('@/features/routes/PlaceDetailView.vue'), props: true },
           { path: 'locations/:id', name: 'map-location', component: () => import('@/features/locations/LocationDetailView.vue'), props: true },
           { path: 'routes/:slug', name: 'map-route', component: () => import('@/features/routes/RouteDetailView.vue'), props: true },
+          // the collection opened from the tasks sheet: over the map, back to the sheet (the profile has its own)
+          { path: 'collection', name: 'map-collection', component: () => import('@/features/collection/CollectionView.vue') },
           // the Zavidovo routes, places and artifacts (same URL /routes): over the map too, a swipe back shows it
           { path: '/routes', name: 'routes', component: () => import('@/features/routes/RoutesView.vue') },
         ],

@@ -58,7 +58,7 @@ async function mountView() {
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: '/tasks', component: { template: '<div/>' } },
     { path: '/routes', component: { template: '<div/>' } },
-    { path: '/collection', component: { template: '<div/>' } },
+    { path: '/collection', name: 'collection', component: { template: '<div/>' } },
     { path: '/routes/:slug', name: 'route', component: { template: '<div/>' } },
   ] })
   await router.push('/tasks')

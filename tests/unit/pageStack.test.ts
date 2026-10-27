@@ -27,6 +27,9 @@ describe('pageStack', () => {
     expect(stackedName(await at('/map'), 'route')).toBe('map-route')
     expect(stackedName(await at('/map/routes/zav-forest'), 'route')).toBe('map-route')
     expect(stackedName(await at('/tasks'), 'route')).toBe('route')
+    // the collection from the tasks sheet stays over the map; from the tasks page it is the profile's
+    expect(stackedName(await at('/map'), 'collection')).toBe('map-collection')
+    expect(stackedName(await at('/tasks'), 'collection')).toBe('collection')
   })
 
   it('a page over the map goes back to the map; a page of its own has no parent', async () => {

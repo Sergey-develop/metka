@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { stackedName } from '@/app/pageStack'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { collectionPhoto } from '@/features/routes/photos'
 import { useAreaQuestsStore } from '@/stores/areaQuests'
@@ -15,6 +17,9 @@ import legendaryBadge from '@/assets/collections/legendary.webp'
  * building of it is opened (the player's collection).
  */
 const quests = useAreaQuestsStore()
+/** in the tasks sheet on the map the collection opens over the map, the sheet staying under it */
+const here = useRoute()
+const collectionLink = computed(() => ({ name: stackedName(here, 'collection') }))
 const collections = computed(() => quests.data?.collections ?? [])
 const earned = (items: { earnedAt: string | null }[]) => items.filter((i) => i.earnedAt).length
 
@@ -42,19 +47,21 @@ onMounted(() => {
     <section v-if="collections.length" class="block">
       <header class="block__head">
         <h2>Коллекция и артефакты</h2>
-        <RouterLink to="/collection" class="block__more" aria-label="Все коллекции и артефакты"><AppIcon name="chevron" :size="20" /></RouterLink>
+        <RouterLink :to="collectionLink" class="block__more" aria-label="Все коллекции и артефакты"><AppIcon name="chevron" :size="20" /></RouterLink>
       </header>
       <ul class="styles">
-        <li v-for="c in collections" :key="c.id" class="style">
-          <img v-if="collectionPhoto(c.id)" class="style__art" :src="collectionPhoto(c.id)!" alt="" />
-          <span v-else class="style__art" />
-          <h3 class="style__title">«{{ c.title }}»</h3>
-          <span class="style__row">
-            <span class="bar" role="progressbar" :aria-valuenow="earned(c.items)" :aria-valuemax="c.items.length" :aria-label="c.title">
-              <span :style="{ width: ratio(earned(c.items), c.items.length) }" />
+        <li v-for="c in collections" :key="c.id">
+          <RouterLink :to="collectionLink" class="style">
+            <img v-if="collectionPhoto(c.id)" class="style__art" :src="collectionPhoto(c.id)!" alt="" />
+            <span v-else class="style__art" />
+            <h3 class="style__title">«{{ c.title }}»</h3>
+            <span class="style__row">
+              <span class="bar" role="progressbar" :aria-valuenow="earned(c.items)" :aria-valuemax="c.items.length" :aria-label="c.title">
+                <span :style="{ width: ratio(earned(c.items), c.items.length) }" />
+              </span>
+              <span class="style__count">{{ earned(c.items) }}/{{ c.items.length }}</span>
             </span>
-            <span class="style__count">{{ earned(c.items) }}/{{ c.items.length }}</span>
-          </span>
+          </RouterLink>
         </li>
       </ul>
     </section>
@@ -114,6 +121,9 @@ $blue: #0189ff;
   list-style: none;
 }
 .style {
+  color: inherit;
+  text-decoration: none;
+  height: 100%;
   display: flex;
   flex-direction: column;
   padding: 10px 12px 12px;
