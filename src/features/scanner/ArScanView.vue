@@ -40,10 +40,10 @@ const status = computed<{ text: string; warn?: boolean } | null>(() => {
   if (scan.selection.id !== null) return null
   const m = scan.match
   if (m?.status === 'inaccurate')
-    return { text: `Точность GPS ±${Math.round(scan.position?.accuracyM ?? 0)} м — выберите здание из списка`, warn: true }
+    return { text: `Точность GPS ±${Math.round(scan.position?.accuracyM ?? 0)} м — выйдите на открытое место`, warn: true }
   if (scan.headingState === 'needs_permission') return { text: 'Нужен доступ к компасу', warn: true }
   if (scan.headingState === 'flat') return { text: 'Держите телефон вертикально' }
-  if (scan.headingState === 'unavailable') return { text: 'Компас недоступен — выберите здание из списка', warn: true }
+  if (scan.headingState === 'unavailable') return { text: 'Компас недоступен — здание не определить', warn: true }
   if (scan.headingState === 'waiting') return { text: 'Ждём данные компаса…' }
   if (scan.selection.id !== null) return { text: 'Похоже, это здание (по GPS и компасу)' }
   if (m?.status === 'likely') return { text: 'Уточняем…' }
@@ -52,17 +52,15 @@ const status = computed<{ text: string; warn?: boolean } | null>(() => {
   return null
 })
 
-/** manual choice list: competing candidates first, else nearby buildings */
+/**
+ * manual choice only between the buildings competing in the frame («Какое здание?»); the «Здания рядом»
+ * list was removed at the owner's request (2026-10-27)
+ */
 const options = computed(() => {
   const m = scan.match
-  if (!m || scan.selection.id !== null || scan.outlinesState !== 'ready') return []
-  if (m.status === 'likely') return [] // a winner is settling; avoid a flickering list
+  if (!m || scan.selection.id !== null || scan.outlinesState !== 'ready' || m.status !== 'ambiguous') return []
   const precise = (scan.position?.accuracyM ?? Infinity) <= 20
-  const list =
-    m.status === 'ambiguous'
-      ? m.candidates.slice(0, 4).map((c) => ({ outline: c.outline, distanceM: c.distanceM }))
-      : m.nearby.map((n) => ({ outline: n.outline, distanceM: n.distanceM }))
-  return list.map((o) => ({ ...o, distanceM: precise ? o.distanceM : null }))
+  return m.candidates.slice(0, 4).map((c) => ({ outline: c.outline, distanceM: precise ? c.distanceM : null }))
 })
 
 const noBuildingsNearby = computed(
@@ -159,7 +157,7 @@ onBeforeUnmount(() => {
       />
 
       <section v-else-if="options.length" class="ar__choice card" aria-label="Выберите здание">
-        <h2>{{ scan.match?.status === 'ambiguous' ? 'Какое здание?' : 'Здания рядом' }}</h2>
+        <h2>Какое здание?</h2>
         <button v-for="o in options" :key="o.outline.id" type="button" class="ar__option" @click="choose(o.outline.id)">
           <span>{{ label(o.outline) }}</span>
           <small v-if="o.distanceM !== null">≈{{ Math.round(o.distanceM / 5) * 5 }} м</small>

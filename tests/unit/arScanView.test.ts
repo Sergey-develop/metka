@@ -76,23 +76,16 @@ describe('ArScanView', () => {
     w.unmount()
   })
 
-  it('no compass: says so and lists nearby buildings to choose from (no automatic pick)', async () => {
+  it('no compass: says so, no «Здания рядом» list and no automatic pick', async () => {
     install({})
     const r = router()
     await r.push('/scan')
     const w = mount(ArScanView, { global: { plugins: [r] }, attachTo: document.body })
     await flushPromises()
     expect(w.find('.ar__status').text()).toContain('Компас недоступен')
-    const options = w.findAll('.ar__option').map((b) => b.text())
-    expect(options[0]).toContain('Школа')
-    expect(options).toHaveLength(2)
+    expect(w.find('.ar__choice').exists()).toBe(false)
+    expect(w.text()).not.toContain('Здания рядом')
     expect(w.find('.info').exists()).toBe(false)
-    await w.findAll('.ar__option')[0]!.trigger('click')
-    expect(w.find('.info__title').text()).toBe('Школа')
-    expect(w.find('.ar__status').exists()).toBe(false) // the open card speaks for itself
-    await w.find('.ar__dismiss').trigger('click')
-    expect(w.find('.info').exists()).toBe(false) // closed: back to the list
-    expect(w.findAll('.ar__option')).toHaveLength(2)
     w.unmount()
   })
 })
