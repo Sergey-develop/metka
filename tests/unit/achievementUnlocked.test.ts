@@ -5,6 +5,7 @@ import { services } from '@/app/providers/services'
 import AchievementUnlocked from '@/features/profile/AchievementUnlocked.vue'
 import { useAchievementAlertsStore } from '@/stores/achievementAlerts'
 import { useProfileStore } from '@/stores/profile'
+import { useQuestsStore } from '@/stores/quests'
 import type { QuestView } from '@/types/game'
 import { installFakeServices } from './helpers'
 
@@ -72,4 +73,20 @@ describe('AchievementUnlocked', () => {
     expect(w.find('.unlock__reward').text()).toBe('+200 опыта')
     w.unmount()
   })
+
+  it('after a quest step: an achievement completed a moment ago is announced, older or claimed ones are not', async () => {
+    const now = new Date().toISOString()
+    api().getQuests = vi.fn(async () => [
+      quest('r1', 'Первый маршрут', { kind: 'route_count', completedAt: now }),
+      quest('old', 'Давнее', { completedAt: '2026-01-01T00:00:00Z' }),
+      quest('got', 'Уже забрано', { completedAt: now, claimedAt: now }),
+      quest('todo', 'В процессе', { completedAt: null, progress: 0 }),
+    ])
+    await useQuestsStore().announceCompleted()
+    expect(useAchievementAlertsStore().queue.map((a) => a.questId)).toEqual(['r1'])
+    // announced once a session
+    await useQuestsStore().announceCompleted()
+    expect(useAchievementAlertsStore().queue).toHaveLength(1)
+  })
 })
+

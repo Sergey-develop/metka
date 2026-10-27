@@ -6,6 +6,7 @@ import { GeolocationError } from '@/services/geolocation/types'
 import type { AreaPlace, AreaQuests, ArtifactRef, CheckInResult, RouteStep, StepResult } from '@/types/game'
 import type { GameAreaId } from '@/utils/gameAreas'
 import { useProfileStore } from './profile'
+import { useQuestsStore } from './quests'
 
 /** what the step card shows after a tap */
 export type StepOutcome =
@@ -111,6 +112,8 @@ export const useAreaQuestsStore = defineStore('areaQuests', () => {
       useProfileStore().applyStats(result.profile)
       markDone(step.id, result.routeCompleted)
       markEarned(result.artifacts)
+      // a finished route or a new artifact may complete an achievement (migration 033)
+      if (result.routeCompleted || result.artifacts.length) void useQuestsStore().announceCompleted()
       return { kind: 'done', xp: result.reward.xp, coins: result.reward.coins, artifacts: result.artifacts, routeCompleted: result.routeCompleted }
     } finally {
       busyStep.value = null
@@ -143,6 +146,7 @@ export const useAreaQuestsStore = defineStore('areaQuests', () => {
       if (result.status === 'already_done') return { kind: 'done', xp: 0, coins: 0, artifacts: [], routeCompleted: false }
       useProfileStore().applyStats(result.profile)
       markEarned(result.artifacts)
+      if (result.artifacts.length) void useQuestsStore().announceCompleted()
       return { kind: 'done', xp: result.reward.xp, coins: result.reward.coins, artifacts: result.artifacts, routeCompleted: false }
     } finally {
       busyPlace.value = null

@@ -205,7 +205,8 @@ export interface CollectionItem {
   photoPath: string | null
 }
 
-export type QuestKind = 'discover_count' | 'discover_in_district' | 'discover_rarity'
+/** discover_* — buildings opened by a scan; route_count / artifact_count — the Zavidovo quests (migration 033) */
+export type QuestKind = 'discover_count' | 'discover_in_district' | 'discover_rarity' | 'route_count' | 'artifact_count'
 
 export interface QuestView {
   id: string

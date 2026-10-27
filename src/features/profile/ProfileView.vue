@@ -30,6 +30,8 @@ import AchievementSheet from './AchievementSheet.vue'
 import { badgeKind, sortAchievements } from './achievements'
 import MoscowMapCard from './MoscowMapCard.vue'
 import ProfileSettingsSheet from './ProfileSettingsSheet.vue'
+import artifactBadge from '@/assets/collections/rare.webp'
+import { useAreaQuestsStore } from '@/stores/areaQuests'
 
 /**
  * The player's own profile, or — with `userId` of someone else (opened from the clan screen) — that
@@ -43,6 +45,7 @@ const clan = useClanStore()
 const map = useMapStore()
 const memories = useMemoriesStore()
 const collection = useCollectionStore()
+const areaQuests = useAreaQuestsStore()
 const router = useRouter()
 
 const settingsOpen = ref(false)
@@ -214,13 +217,23 @@ const diaryPhotos = computed(() =>
 )
 
 const RARITY_RANK: Record<Rarity, number> = { legendary: 0, epic: 1, rare: 2, common: 3 }
+/** artifacts earned in the Zavidovo quests, newest first: they lead «Лучшие находки» */
+const artifacts = computed(() =>
+  (areaQuests.data?.collections ?? [])
+    .flatMap((c) => c.items.filter((i) => i.earnedAt))
+    .sort((a, b) => Date.parse(b.earnedAt!) - Date.parse(a.earnedAt!))
+    .map((i) => ({ id: `artifact:${i.id}`, url: null, name: i.title, artifact: true })),
+)
 const bestFinds = computed(() =>
   isOther.value
-    ? (other.value?.bestFinds ?? []).map((f) => ({ id: f.buildingId, url: f.imageUrl, name: f.name }))
-    : [...collection.items]
-    .sort((a, b) => RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity])
-    .slice(0, 8)
-    .map((item) => ({ id: item.buildingId, url: collection.imageOf(item), name: item.name })),
+    ? (other.value?.bestFinds ?? []).map((f) => ({ id: f.buildingId, url: f.imageUrl, name: f.name, artifact: false }))
+    : [
+        ...artifacts.value,
+        ...[...collection.items]
+          .sort((a, b) => RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity])
+          .slice(0, 8)
+          .map((item) => ({ id: item.buildingId, url: collection.imageOf(item), name: item.name, artifact: false })),
+      ],
 )
 
 function openFavorites(): void {
@@ -241,6 +254,7 @@ onMounted(() => {
   if (!store.profile) void store.load()
   void memories.load()
   void collection.load()
+  void areaQuests.load()
   void loadStats()
   void quests.load()
   void locate()
@@ -498,7 +512,11 @@ watch(
         </RouterLink>
         <div v-else class="strip">
           <template v-for="f in bestFinds" :key="f.id">
-            <img v-if="f.url" class="strip__item" :src="f.url" :alt="f.name" />
+            <span v-if="f.artifact" class="strip__item strip__item--artifact">
+              <img :src="artifactBadge" alt="" />
+              {{ f.name }}
+            </span>
+            <img v-else-if="f.url" class="strip__item" :src="f.url" :alt="f.name" />
             <span v-else class="strip__item strip__item--name">{{ f.name }}</span>
           </template>
           <span v-for="i in Math.max(0, PLACEHOLDERS - bestFinds.length)" :key="`c${i}`" class="strip__item strip__item--slot" aria-hidden="true">+</span>
@@ -980,6 +998,25 @@ $gray: #6d6d6e;
     line-height: 14px;
     color: #fff;
     overflow: hidden;
+  }
+  // an artifact of the Zavidovo quests: its badge and name on gold
+  &--artifact {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px;
+    background: linear-gradient(160deg, #fff3c4, #ffd76a);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 14px;
+    text-align: center;
+    color: #5a4300;
+    img {
+      width: 40px;
+      height: 40px;
+    }
   }
   // still loading: a soft shimmer
   &--skeleton {

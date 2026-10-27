@@ -3,7 +3,11 @@ import { ref } from 'vue'
 import { services } from '@/app/providers/services'
 import { type ApiError, toApiError } from '@/services/api/errors'
 import type { QuestView } from '@/types/game'
+import { useAchievementAlertsStore } from './achievementAlerts'
 import { useProfileStore } from './profile'
+
+/** an achievement completed within this long counts as «just now» */
+const RECENT_MS = 10 * 60_000
 
 export const useQuestsStore = defineStore('quests', () => {
   const quests = ref<QuestView[]>([])
@@ -44,6 +48,20 @@ export const useQuestsStore = defineStore('quests', () => {
     }
   }
 
+  /**
+   * After a quest step or a check-in (they report no achievements): fetch them again and announce the ones
+   * completed a moment ago and not claimed yet (migration 033 completes them by trigger).
+   */
+  async function announceCompleted(): Promise<void> {
+    await load(true)
+    const since = Date.now() - RECENT_MS
+    useAchievementAlertsStore().push(
+      quests.value
+        .filter((q) => q.completedAt && !q.claimedAt && Date.parse(q.completedAt) >= since)
+        .map((q) => ({ questId: q.id, title: q.title })),
+    )
+  }
+
   function invalidate(): void {
     loaded.value = false
   }
@@ -54,5 +72,5 @@ export const useQuestsStore = defineStore('quests', () => {
     error.value = null
   }
 
-  return { quests, loaded, loading, error, claiming, load, claim, invalidate, reset }
+  return { quests, loaded, loading, error, claiming, load, claim, announceCompleted, invalidate, reset }
 })

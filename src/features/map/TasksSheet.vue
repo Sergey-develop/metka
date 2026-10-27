@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import BottomSheet from '@/components/ui/BottomSheet.vue'
 import PageHero from '@/components/ui/PageHero.vue'
+import ArtifactsBlock from '@/features/tasks/ArtifactsBlock.vue'
 import TasksBoard from '@/features/tasks/TasksBoard.vue'
 import { TASKS_HERO } from '@/features/tasks/tasksText'
 
@@ -22,6 +23,8 @@ const PAGE_TOP = 118
     </template>
     <template #default="{ expanded, expand }">
       <TasksBoard :sheet="!expanded" @more="expand" />
+      <!-- expanded it is the tasks page: the artifact collections and rarity too (mockup Tasks.jpg) -->
+      <ArtifactsBlock v-if="expanded" />
     </template>
   </BottomSheet>
 </template>

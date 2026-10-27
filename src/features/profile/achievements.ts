@@ -5,6 +5,8 @@ const KIND_BADGE: Record<QuestKind, 'pin' | 'map' | 'compass'> = {
   discover_count: 'pin',
   discover_in_district: 'map',
   discover_rarity: 'compass',
+  route_count: 'map',
+  artifact_count: 'compass',
 }
 
 export const badgeKind = (q: QuestView) => KIND_BADGE[q.kind]

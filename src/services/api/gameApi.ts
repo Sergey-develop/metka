@@ -709,7 +709,7 @@ export class GameApi implements CandidateMatcher {
         slug: str(o, 'slug'),
         title: str(o, 'title'),
         description: str(o, 'description'),
-        kind: oneOf(o, 'kind', ['discover_count', 'discover_in_district', 'discover_rarity'] as const),
+        kind: oneOf(o, 'kind', ['discover_count', 'discover_in_district', 'discover_rarity', 'route_count', 'artifact_count'] as const),
         target: num(o, 'target'),
         progress: p ? num(p, 'progress') : 0,
         reward: { xp: num(o, 'reward_xp'), coins: num(o, 'reward_coins') },
