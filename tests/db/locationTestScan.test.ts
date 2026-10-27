@@ -40,7 +40,8 @@ async function user(tester: boolean): Promise<string> {
 }
 
 beforeAll(async () => {
-  t = await createTestDb({ seed: true })
+  // the tester-only scan of migration 009; migration 030 opens it to every player (locationScanForAll.test.ts)
+  t = await createTestDb({ seed: true, stopBefore: '20261027000030' })
 })
 
 describe('location-only test scans', () => {

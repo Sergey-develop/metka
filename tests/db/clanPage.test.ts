@@ -32,7 +32,7 @@ async function explore(u: string, lat: number, lng: number, daysAgo = 0): Promis
 async function player(): Promise<string> {
   const id = randomUUID()
   await t.createUser(id, `p${id.slice(0, 8)}`)
-  await t.db.query(`insert into public.location_scan_testers (user_id) values ($1)`, [id])
+  await t.db.query(`insert into public.location_scan_testers (user_id) values ($1) on conflict do nothing`, [id])
   return id
 }
 

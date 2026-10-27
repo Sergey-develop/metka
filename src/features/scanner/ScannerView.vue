@@ -57,8 +57,9 @@ function teleport(): void {
       </div>
     </header>
 
-    <p v-if="scan.locationTestMode" class="notice notice--warning scanner__dev">
-      Тестовый режим: здание засчитывается по местоположению, без распознавания фото.
+    <!-- every player since migration 030: the building counts by location, the photo goes to the album -->
+    <p v-if="scan.locationTestMode" class="notice scanner__dev">
+      Подойдите к зданию и сделайте снимок — оно откроется по вашему местоположению.
     </p>
     <p v-if="mocked" class="notice notice--warning scanner__dev">
       Режим разработки: распознавание симулируется, проверка на сервере — настоящая.
