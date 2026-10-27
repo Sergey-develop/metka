@@ -18,11 +18,12 @@
 
 <style scoped lang="scss">
 // full screen, its own scroll; transparent itself, so the parent shows through where the page is swiped
-// away. Under the tab bar (z 20) like every page
+// away. Above the parent's sheets (BottomSheet, z 18): a quest opened from the tasks sheet lies over it and
+// goes back to it as it was. Under the tab bar (z 20) and its wash (19, later in the page) like every page
 .page-over {
   position: fixed;
   inset: 0;
-  z-index: 15;
+  z-index: 19;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;

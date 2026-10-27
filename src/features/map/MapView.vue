@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { services } from '@/app/providers/services'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import FigureLoader from '@/components/ui/FigureLoader.vue'
@@ -78,13 +78,11 @@ onBeforeUnmount(() => routeCardObserver?.disconnect())
 const raisedStyle = computed(() => (routeCard.value ? { '--route-card-h': `${routeCardH.value}px` } : undefined))
 /** the clan / tasks sheets over the map (mockups «выдвигается клан», «выдвигаются задания») */
 const sheet = ref<'clan' | 'tasks' | null>(null)
-// a page opened over the map from a sheet (PageOverlay) would lie under the sheet: the sheet closes.
-// A page of its own (a sheet handing over to /clan) leaves the map as it is, for its hand-over
-const current = useRoute()
+// a walk started from a page over the map (a quest's «Открыть карту»): the sheet steps aside for the map
 watch(
-  () => current.fullPath,
-  () => {
-    if (current.matched[1]?.name === 'map') sheet.value = null
+  () => route.target,
+  (target) => {
+    if (target) sheet.value = null
   },
 )
 const router = useRouter()

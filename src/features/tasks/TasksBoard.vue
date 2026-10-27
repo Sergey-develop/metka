@@ -10,6 +10,8 @@ import cityArt from '@/assets/tasks/city.webp'
 import mapArt from '@/assets/tasks/map.webp'
 import shoeArt from '@/assets/tasks/shoe.webp'
 import towerArt from '@/assets/tasks/tower.webp'
+import { useRoute } from 'vue-router'
+import { stackedName } from '@/app/pageStack'
 import { routePhoto } from '@/features/routes/photos'
 import { useAreaQuestsStore } from '@/stores/areaQuests'
 import { useTasksStore } from '@/stores/tasks'
@@ -27,6 +29,8 @@ import { timeLeft } from './tasksText'
 defineProps<{ sheet?: boolean }>()
 const emit = defineEmits<{ more: [] }>()
 const tasks = useTasksStore()
+/** in the tasks sheet on the map a quest opens over the map, the sheet staying under it */
+const here = useRoute()
 
 const ART: Record<TaskKind, string> = { discover: mapArt, cells: shoeArt, rare: buildingArt, memory: cameraArt, districts: cityArt }
 
@@ -118,7 +122,7 @@ onBeforeUnmount(() => {
         <RouterLink
           v-for="r in quests.routes"
           :key="r.slug"
-          :to="{ name: 'route', params: { slug: r.slug } }"
+          :to="{ name: stackedName(here, 'route'), params: { slug: r.slug } }"
           class="quest"
           :class="{ 'quest--done': r.completedAt }"
           :style="routePhoto(r) ? { backgroundImage: `url(${routePhoto(r)})` } : undefined"
