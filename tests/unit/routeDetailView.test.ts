@@ -233,9 +233,14 @@ describe('PlaceDetailView', () => {
     expect(w.find('a[href="tel:+79038067997"]').exists()).toBe(true)
     expect(w.find('a[href="https://yatraktir.ru"]').text()).toBe('yatraktir.ru')
     expect(w.find('.pd__routes').exists()).toBe(false)
+    // a restaurant with a phone: «Забронировать» calls it
+    expect(w.find('.pd__book').text()).toBe('Забронировать')
+    expect(w.find('.pd__book').attributes('href')).toBe('tel:+79038067997')
 
     const bay = await mountAt('/places/zav-bay', PlaceDetailView, { id: 'zav-bay' })
     expect(bay.w.find('.pd__route').text()).toContain('Завидово: поймай волну')
+    // not a restaurant: no booking
+    expect(bay.w.find('.pd__book').exists()).toBe(false)
     expect(bay.w.find('.pd__cover').attributes('src')).toContain('zav-bay')
   })
 })
