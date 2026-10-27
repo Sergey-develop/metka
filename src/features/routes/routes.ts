@@ -88,16 +88,9 @@ export function placeBadges(p: AreaPlace): { kind: PlaceKind; label: string; typ
   return { kind, label: KIND_BADGE[kind], type: known?.type ?? null }
 }
 
-export const KIND_LABEL: Record<StepKind, string> = {
-  checkin: 'Чек-ин',
-  photo: 'Фото',
-  question: 'Вопрос',
-}
-
 export const doneCount = (r: QuestRoute) => r.steps.filter((s) => s.doneAt).length
 /** the step the app suggests next: the first one not done, in route order */
 export const nextStep = (r: QuestRoute) => r.steps.find((s) => !s.doneAt) ?? null
-export const stepsXp = (r: QuestRoute) => r.steps.reduce((sum, s) => sum + s.rewardXp, 0)
 
 /** a place shaped as a route target (the walking route and its map card take a game building) */
 export function placeTarget(p: AreaPlace & { lat: number; lng: number }): MapBuilding {

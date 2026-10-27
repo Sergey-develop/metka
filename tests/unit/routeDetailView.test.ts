@@ -114,9 +114,13 @@ describe('RouteDetailView', () => {
       profile: null,
     }))
     const { w } = await mountAt('/routes/zav-catch-wave', RouteDetailView, { slug: 'zav-catch-wave' })
-    expect(w.find('.rd__title').text()).toBe('Завидово: поймай волну')
+    // the cover names the quest; the steps are cards with their place's photo and status
+    expect(w.find('.hero__title').text()).toBe(QUESTS.routes[0]!.questTitle)
+    expect(w.find('.prog__count').text()).toBe('0/2')
     expect(w.find('.st--open .st__title').text()).toBe('Открой горизонт')
-    expect(w.find('.st--open .st__photo--place').attributes('src')).toContain('zav-bay')
+    expect(w.find('.st--open .st__thumb').attributes('src')).toContain('zav-bay')
+    expect(w.find('.st--open .tag--todo').text()).toBe('Не выполнено')
+    expect(w.find('.st--open .info__row').text()).toContain('Чек-ин в точке')
     await w.find('.st--open .st__primary').trigger('click')
     await flushPromises()
     expect(api().completeRouteStep).toHaveBeenCalledWith('s1', { lat: BAY.lat, lng: BAY.lng, accuracyM: 12 }, null)
@@ -124,7 +128,9 @@ describe('RouteDetailView', () => {
     expect(w.text()).toContain('Новый артефакт: «Первое открытие»')
     // the next step opens by itself
     expect(w.find('.st--open .st__title').text()).toBe('Найди отражение')
-    expect(w.find('.rd__progress').text()).toContain('1/2')
+    expect(w.find('.prog__count').text()).toBe('1/2')
+    expect(w.find('.st--done .tag--done').text()).toBe('Выполнено')
+    expect(w.findAll('.prog__line li.on')).toHaveLength(1)
   })
 
   it('says how far the place is when the server finds the player too far', async () => {
@@ -171,9 +177,9 @@ describe('RouteDetailView', () => {
     expect(teleport).toHaveBeenCalledWith(BAY.lat, BAY.lng)
   })
 
-  it('«Как дойти» starts the walking route to the step and comes back to the route', async () => {
+  it('«Открыть карту» starts the walking route to the step and comes back to the route', async () => {
     const { w, router } = await mountAt('/routes/zav-catch-wave', RouteDetailView, { slug: 'zav-catch-wave' })
-    await w.find('.st--open .st__walk').trigger('click')
+    await w.find('.st--open .st__map').trigger('click')
     await flushPromises()
     const route = useRouteStore()
     expect(route.target).toMatchObject({ id: 'place:zav-bay', lat: BAY.lat, lng: BAY.lng, scanRadiusM: 150 })
