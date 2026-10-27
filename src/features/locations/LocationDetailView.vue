@@ -107,7 +107,7 @@ onMounted(loadAll)
 </script>
 
 <template>
-  <main class="ld" :style="swipeBack.style.value" v-on="swipeBack.handlers">
+  <main class="ld" v-on="swipeBack.handlers">
     <template v-if="building">
       <div class="ld__hero">
         <img v-if="photo(building)" :src="photo(building)!" alt="" />
@@ -239,7 +239,6 @@ $blue: #0189ff;
 .ld {
   // swiped right back to the locations list (useSwipeBack); vertical scrolling stays the browser's
   touch-action: pan-y;
-  transition: transform 0.25s var(--ease);
   min-height: 100%;
   background: #fff;
 }

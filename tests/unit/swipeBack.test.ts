@@ -2,17 +2,24 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { transitionFor } from '@/app/pageTransition'
 import { useSwipeBack } from '@/features/locations/swipeBack'
 
 const Page = defineComponent({
   setup() {
     const swipe = useSwipeBack()
     return () =>
-      h('main', { class: 'page', style: swipe.style.value, onPointerdown: swipe.handlers.pointerdown, onPointermove: swipe.handlers.pointermove, onPointerup: swipe.handlers.pointerup }, [
-        h('div', { class: 'strip', style: 'overflow-x: auto' }),
-      ])
+      h('main', {
+        class: 'page',
+        onPointerdown: swipe.handlers.pointerdown,
+        onPointermove: swipe.handlers.pointermove,
+        onPointerup: swipe.handlers.pointerup,
+      })
   },
 })
+
+const frame = () => new Promise((r) => requestAnimationFrame(r))
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 async function open(from: string | null) {
   const stub = { template: '<div/>' }
@@ -28,41 +35,50 @@ async function open(from: string | null) {
   await router.push('/places/zav-bay')
   const w = mount({ template: '<RouterView />' }, { global: { plugins: [router] } })
   await flushPromises()
-  const main = w.find('main')
+  const main = w.find('main').element as HTMLElement
   const at = async (type: string, x: number, y = 300, t = 0) => {
     vi.spyOn(performance, 'now').mockReturnValue(t)
-    await main.trigger(type, { pointerId: 1, pointerType: 'touch', clientX: x, clientY: y })
+    await w.find('main').trigger(type, { pointerId: 1, pointerType: 'touch', clientX: x, clientY: y })
   }
-  return { router, w, main, at }
+  return { router, main, at }
 }
 
 afterEach(() => vi.restoreAllMocks())
 
 describe('useSwipeBack', () => {
-  it('a long swipe right leaves for the locations list; the page follows the finger meanwhile', async () => {
+  it('the page follows the finger from where the swipe began, slides out, then the list opens with no animation', async () => {
     const { router, main, at } = await open('/map')
     await at('pointerdown', 20)
     await at('pointermove', 60, 302, 100)
-    expect(main.attributes('style')).toContain('translateX(40px)')
+    await frame()
+    expect(main.style.transform).toBe('translateX(30px)') // 40px moved − the 10px it took to become a swipe
     await at('pointermove', 160, 305, 400)
     await at('pointerup', 160, 305, 500)
+    expect(main.style.transform).toBe('translateX(100%)')
+    expect(router.currentRoute.value.path).toBe('/places/zav-bay') // not before the page has left
+    await wait(260)
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/locations')
+    // the tab layout asks once: no animation for the list (the page already left), then back to normal
+    expect(transitionFor(router.currentRoute.value)).toBe('none')
+    expect(transitionFor(router.currentRoute.value)).toBe('fade')
   })
 
-  it('a short slow drag puts the page back; a vertical move is a scroll, not a swipe', async () => {
+  it('a short slow drag slides the page back; a vertical move is a scroll, not a swipe', async () => {
     const { router, main, at } = await open('/map')
     await at('pointerdown', 20)
     await at('pointermove', 70, 300, 300)
     await at('pointerup', 70, 300, 600)
+    expect(main.style.transform).toBe('')
+    await wait(260)
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/places/zav-bay')
-    expect(main.attributes('style') ?? '').not.toContain('translateX')
 
     await at('pointerdown', 20, 300)
     await at('pointermove', 30, 360, 100)
     await at('pointermove', 200, 380, 200)
     await at('pointerup', 200, 380, 300)
+    await wait(260)
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/places/zav-bay')
   })
@@ -72,6 +88,7 @@ describe('useSwipeBack', () => {
     await at('pointerdown', 20, 300, 0)
     await at('pointermove', 70, 300, 40)
     await at('pointerup', 70, 300, 60)
+    await wait(260)
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/locations')
   })

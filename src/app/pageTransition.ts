@@ -8,12 +8,18 @@ import type { RouteLocationNormalized } from 'vue-router'
  *             the sheet's content had;
  *   rise    — pages that open like sheets (route meta `rise`: clan, tasks, diary) slide up softly;
  *   fade    — every other change: the new page fades in, the old one goes at once;
- *   none    — no animation (kept for callers that need an instant change).
+ *   none    — no animation: the old page already left by itself (markInstant, the swipe back).
  */
 export type PageTransition = 'handoff' | 'rise' | 'fade' | 'none'
 
 let handoffPending = false
 let handoffScroll: number | null = null
+let instantPending = false
+
+/** Call right before navigating when the old page has already animated itself away (swipe back). */
+export function markInstant(): void {
+  instantPending = true
+}
 
 /** Call right before router.push from an expanded sheet, with its content's scroll position. */
 export function markSheetHandoff(scrollTop = 0): void {
@@ -23,6 +29,10 @@ export function markSheetHandoff(scrollTop = 0): void {
 
 /** The transition for this navigation (consumes the handoff mark). */
 export function transitionFor(to: RouteLocationNormalized): PageTransition {
+  if (instantPending) {
+    instantPending = false
+    return 'none'
+  }
   if (handoffPending) {
     handoffPending = false
     return 'handoff'

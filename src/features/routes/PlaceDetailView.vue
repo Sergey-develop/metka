@@ -58,7 +58,7 @@ onMounted(() => void quests.load())
 </script>
 
 <template>
-  <main class="page pd" :style="swipeBack.style.value" v-on="swipeBack.handlers">
+  <main class="page pd" v-on="swipeBack.handlers">
     <header class="pd__head">
       <button class="pd__back" aria-label="Назад" @click="router.back()"><AppIcon name="back" /></button>
       <h1>Место</h1>
@@ -151,7 +151,6 @@ $card: #f3f3f9;
 .pd {
   // swiped right back to the locations list (useSwipeBack); vertical scrolling stays the browser's
   touch-action: pan-y;
-  transition: transform 0.25s var(--ease);
   padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + 24px);
   background: #fff;
 }
