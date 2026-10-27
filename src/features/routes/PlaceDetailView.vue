@@ -13,9 +13,12 @@ import { distanceMeters, formatDistance } from '@/utils/geo'
 import { message, rewardLines } from './outcome'
 import { photoCredit, placePhoto } from './photos'
 import { hasPoint, placeTarget, TAG_LABEL } from './routes'
+import { useSwipeBack } from '@/features/locations/swipeBack'
 
 /** A place of Zavidovo (area_places): photo, what it is, contacts, the way there and the routes through it. */
 const props = defineProps<{ id: string }>()
+/** swipe right: back to the list of all locations */
+const swipeBack = useSwipeBack()
 const router = useRouter()
 const quests = useAreaQuestsStore()
 const map = useMapStore()
@@ -55,7 +58,7 @@ onMounted(() => void quests.load())
 </script>
 
 <template>
-  <main class="page pd">
+  <main class="page pd" :style="swipeBack.style.value" v-on="swipeBack.handlers">
     <header class="pd__head">
       <button class="pd__back" aria-label="Назад" @click="router.back()"><AppIcon name="back" /></button>
       <h1>Место</h1>
@@ -146,6 +149,9 @@ $blue: #0189ff;
 $card: #f3f3f9;
 
 .pd {
+  // swiped right back to the locations list (useSwipeBack); vertical scrolling stays the browser's
+  touch-action: pan-y;
+  transition: transform 0.25s var(--ease);
   padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + 24px);
   background: #fff;
 }

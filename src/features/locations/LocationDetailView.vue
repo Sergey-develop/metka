@@ -10,9 +10,12 @@ import { useRouteStore } from '@/stores/route'
 import type { MapBuilding, Rarity } from '@/types/game'
 import { distanceMeters, formatDistance } from '@/utils/geo'
 import { usePlaces, walkTime } from './places'
+import { useSwipeBack } from '@/features/locations/swipeBack'
 
 const props = defineProps<{ id: string }>()
 
+/** swipe right: back to the list of all locations */
+const swipeBack = useSwipeBack()
 const router = useRouter()
 const map = useMapStore()
 const route = useRouteStore()
@@ -104,7 +107,7 @@ onMounted(loadAll)
 </script>
 
 <template>
-  <main class="ld">
+  <main class="ld" :style="swipeBack.style.value" v-on="swipeBack.handlers">
     <template v-if="building">
       <div class="ld__hero">
         <img v-if="photo(building)" :src="photo(building)!" alt="" />
@@ -234,6 +237,9 @@ $card: #f3f3f9;
 $blue: #0189ff;
 
 .ld {
+  // swiped right back to the locations list (useSwipeBack); vertical scrolling stays the browser's
+  touch-action: pan-y;
+  transition: transform 0.25s var(--ease);
   min-height: 100%;
   background: #fff;
 }
