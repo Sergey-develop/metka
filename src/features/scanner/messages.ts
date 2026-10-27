@@ -6,6 +6,8 @@ import { formatDistance } from '@/utils/geo'
 export interface UiMessage {
   title: string
   text: string
+  /** technical detail, small under the text */
+  detail?: string
   /** whether "try again" makes sense */
   retryable: boolean
 }
@@ -29,7 +31,7 @@ export function failureMessage(f: ScanFailure): UiMessage {
     case 'camera_unavailable':
       return { title: 'Камера недоступна', text: 'На устройстве не найдена камера или она занята другим приложением.', retryable: true }
     case 'camera_failed':
-      return { title: 'Не удалось сделать снимок', text: 'Попробуйте ещё раз.', retryable: true }
+      return { title: 'Не удалось сделать снимок', text: 'Попробуйте ещё раз.', detail: f.detail, retryable: true }
     case 'location_denied':
       return {
         title: 'Нет доступа к геолокации',

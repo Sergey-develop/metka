@@ -117,6 +117,7 @@ function teleport(): void {
         <div v-else-if="scan.phase === 'failed' && failure" class="result result--bad" role="alert">
           <h2>{{ failure.title }}</h2>
           <p>{{ failure.text }}</p>
+          <p v-if="failure.detail" class="result__detail">{{ failure.detail }}</p>
           <AppButton v-if="failure.retryable" block @click="scan.retry()">
             <AppIcon name="retry" :size="18" /> {{ scan.pendingSubmission ? 'Отправить снова' : 'Повторить' }}
           </AppButton>
@@ -254,5 +255,12 @@ function teleport(): void {
       color: var(--c-text);
     }
   }
+}
+.result__detail {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  color: #8e8e93;
+  word-break: break-word;
 }
 </style>

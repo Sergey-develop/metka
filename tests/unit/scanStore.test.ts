@@ -157,6 +157,14 @@ describe('scan store', () => {
     expect(fakes.recognition.recognize).not.toHaveBeenCalled()
   })
 
+  it('a camera failure says where the app runs and what the camera said (shown small on screen)', async () => {
+    fakes.camera.nextError = new CameraError('failed', 'cannot read captured image (0)')
+    const scan = startScan()
+    await scan.capture()
+    expect(scan.failure).toEqual({ kind: 'camera_failed', detail: 'браузер · CameraError: cannot read captured image (0)' })
+    expect(fakes.api.submitScan).not.toHaveBeenCalled()
+  })
+
   it('returns to ready when the user cancels the camera', async () => {
     fakes.camera.nextError = new CameraError('cancelled')
     const scan = startScan()

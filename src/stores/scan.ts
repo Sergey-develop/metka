@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import { services } from '@/app/providers/services'
@@ -23,7 +24,8 @@ export type ScanFailure =
   | { kind: 'recognition_unavailable' }
   | { kind: 'camera_denied' }
   | { kind: 'camera_unavailable' }
-  | { kind: 'camera_failed' }
+  /** detail: where the app runs and what the camera said — shown small, there are no dev tools on a phone */
+  | { kind: 'camera_failed'; detail: string }
   | { kind: 'location_denied' }
   | { kind: 'gps_disabled' }
   | { kind: 'gps_unavailable' }
@@ -204,9 +206,11 @@ export const useScanStore = defineStore('scan', () => {
         phase.value = 'ready'
         return
       }
-      return fail({
-        kind: code === 'permission_denied' ? 'camera_denied' : code === 'unavailable' ? 'camera_unavailable' : 'camera_failed',
-      })
+      if (code === 'permission_denied') return fail({ kind: 'camera_denied' })
+      if (code === 'unavailable') return fail({ kind: 'camera_unavailable' })
+      const where = Capacitor.isNativePlatform() ? 'приложение' : 'браузер'
+      const what = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
+      return fail({ kind: 'camera_failed', detail: `${where} · ${what}`.slice(0, 300) })
     }
 
     if (locationTest) {
