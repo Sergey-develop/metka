@@ -142,25 +142,29 @@ onMounted(() => {
       </section>
     </template>
 
-    <Transition name="sheet">
-      <BottomSheet v-if="picking" label="Новая запись" @close="picking = false">
-        <h2 class="pick__title">О каком месте запись?</h2>
-        <StateBlock v-if="collection.loading && !collection.loaded" kind="loading" />
-        <p v-else-if="candidates.length === 0" class="pick__empty">
-          {{ collection.items.length ? 'О всех открытых местах уже есть записи. Откройте новое здание сканированием.' : 'Записи ведутся об открытых местах. Откройте здание сканированием.' }}
-        </p>
-        <ul v-else class="pick">
-          <li v-for="item in candidates" :key="item.buildingId">
-            <button class="pick__row" @click="write(item)">
-              <img v-if="collection.imageOf(item)" :src="collection.imageOf(item)!" alt="" />
-              <span v-else class="pick__ph" />
-              <span>{{ item.name }}</span>
-              <AppIcon name="chevron" :size="18" />
-            </button>
-          </li>
-        </ul>
-      </BottomSheet>
-    </Transition>
+    <!-- out to <body>: inside the diary sheet (moved by transform) a fixed sheet would be clipped to its
+         panel (the dimming missed its corners) and its touches would drag the diary under it -->
+    <Teleport to="body">
+      <Transition name="sheet">
+        <BottomSheet v-if="picking" label="Новая запись" @close="picking = false">
+          <h2 class="pick__title">О каком месте запись?</h2>
+          <StateBlock v-if="collection.loading && !collection.loaded" kind="loading" />
+          <p v-else-if="candidates.length === 0" class="pick__empty">
+            {{ collection.items.length ? 'О всех открытых местах уже есть записи. Откройте новое здание сканированием.' : 'Записи ведутся об открытых местах. Откройте здание сканированием.' }}
+          </p>
+          <ul v-else class="pick">
+            <li v-for="item in candidates" :key="item.buildingId">
+              <button class="pick__row" @click="write(item)">
+                <img v-if="collection.imageOf(item)" :src="collection.imageOf(item)!" alt="" />
+                <span v-else class="pick__ph" />
+                <span>{{ item.name }}</span>
+                <AppIcon name="chevron" :size="18" />
+              </button>
+            </li>
+          </ul>
+        </BottomSheet>
+      </Transition>
+    </Teleport>
 
     <MemoryEditor
       v-if="editing"

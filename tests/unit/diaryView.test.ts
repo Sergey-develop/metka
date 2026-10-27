@@ -114,4 +114,21 @@ describe('DiarySheet', () => {
     expect(w.emitted('close')).toBeUndefined()
     w.unmount()
   })
+
+  it('in the diary sheet, «Новая запись» opens over the whole screen, not inside the diary panel', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: ['/profile', '/diary', '/album'].map((path) => ({ path, component: { template: '<div/>' } })),
+    })
+    await router.push('/profile')
+    const w = mount(DiarySheet, { global: { plugins: [router] }, attachTo: document.body })
+    await flushPromises()
+    await w.find('.new').trigger('click')
+    await flushPromises()
+    const picker = document.body.querySelector('.pick__row')!.closest('.bsheet')!
+    // the diary panel moves with a transform: inside it a fixed sheet would be clipped and drag the diary
+    expect(w.find('.bsheet__body').element.contains(picker)).toBe(false)
+    expect(picker.closest('.bsheet__body')).toBeNull()
+    w.unmount()
+  })
 })
