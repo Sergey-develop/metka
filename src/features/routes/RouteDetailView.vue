@@ -62,6 +62,22 @@ async function share(): Promise<void> {
   }
 }
 const openStep = ref<string | null>(null)
+/** a step opens and closes smoothly: its height runs from 0 to the content's and back */
+function expandEnter(el: Element): void {
+  const box = el as HTMLElement
+  box.style.height = '0px'
+  void box.offsetHeight // start from 0
+  box.style.height = `${box.scrollHeight}px`
+}
+function expandDone(el: Element): void {
+  ;(el as HTMLElement).style.height = '' // free to grow (an answer, a result line)
+}
+function expandLeave(el: Element): void {
+  const box = el as HTMLElement
+  box.style.height = `${box.scrollHeight}px`
+  void box.offsetHeight
+  box.style.height = '0px'
+}
 const answers = ref<Record<string, number>>({})
 const outcomes = ref<Record<string, StepOutcome>>({})
 /** the final screen of the route, shown once when its last step is done */
@@ -201,69 +217,73 @@ onMounted(() => void quests.load())
               <AppIcon class="st__chev" name="chevron" :size="20" />
             </button>
 
-            <div v-if="openStep === step.id" class="st__body">
-              <p class="st__task">{{ step.task }}</p>
-              <div class="info">
-                <p class="info__row">
-                  <FilledIcon class="info__icon" name="pin" :size="22" />
-                  <span>
-                    <small>{{ step.kind === 'question' ? 'Вопрос:' : 'Условия выполнения' }}</small>
-                    {{ condition(step) }}
-                  </span>
-                </p>
-                <p v-if="step.safety" class="info__row">
-                  <span class="info__icon info__icon--warn" aria-hidden="true">!</span>
-                  <span><small>Важно</small>{{ step.safety }}</span>
-                </p>
-                <div class="info__pair">
-                  <p class="info__row">
-                    <CoinIcon class="info__icon" :size="26" />
-                    <span><small>Награда</small>+{{ step.rewardXp }} опыта</span>
-                  </p>
-                  <p v-if="step.artifact" class="info__row">
-                    <img class="info__icon info__badge" :src="artifactBadge" alt="" />
-                    <span><small>Артефакт</small>{{ step.artifact.title }}</span>
+            <Transition name="expand" @enter="expandEnter" @after-enter="expandDone" @leave="expandLeave">
+              <div v-if="openStep === step.id" class="st__wrap">
+                <div class="st__body">
+                  <p class="st__task">{{ step.task }}</p>
+                  <div class="info">
+                    <p class="info__row">
+                      <FilledIcon class="info__icon" name="pin" :size="22" />
+                      <span>
+                        <small>{{ step.kind === 'question' ? 'Вопрос:' : 'Условия выполнения' }}</small>
+                        {{ condition(step) }}
+                      </span>
+                    </p>
+                    <p v-if="step.safety" class="info__row">
+                      <span class="info__icon info__icon--warn" aria-hidden="true">!</span>
+                      <span><small>Важно</small>{{ step.safety }}</span>
+                    </p>
+                    <div class="info__pair">
+                      <p class="info__row">
+                        <CoinIcon class="info__icon" :size="26" />
+                        <span><small>Награда</small>+{{ step.rewardXp }} опыта</span>
+                      </p>
+                      <p v-if="step.artifact" class="info__row">
+                        <img class="info__icon info__badge" :src="artifactBadge" alt="" />
+                        <span><small>Артефакт</small>{{ step.artifact.title }}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <img v-if="quests.photos[step.id]" class="st__photo" :src="quests.photos[step.id]" alt="Твоё фото" />
+
+                  <template v-if="!step.doneAt">
+                    <fieldset v-if="step.kind === 'question' && step.options" class="st__options">
+                      <legend>{{ step.question }}</legend>
+                      <label v-for="(o, i) in step.options" :key="i" class="st__option" :class="{ on: answers[step.id] === i }">
+                        <input v-model="answers[step.id]" type="radio" :name="step.id" :value="i" />{{ o }}
+                      </label>
+                    </fieldset>
+                    <button v-if="step.kind === 'photo'" class="st__primary" :disabled="quests.busyStep !== null" @click="takePhoto(step)">
+                      <AppIcon name="camera" :size="20" />{{ quests.busyStep === step.id ? 'Проверяем…' : 'Сделать фото' }}
+                    </button>
+                    <button
+                      v-else
+                      class="st__primary"
+                      :disabled="quests.busyStep !== null || (step.kind === 'question' && answers[step.id] === undefined)"
+                      @click="send(step)"
+                    >
+                      {{ quests.busyStep === step.id ? 'Проверяем…' : step.kind === 'question' ? 'Ответить' : 'Я на месте' }}
+                    </button>
+                  </template>
+                  <button v-if="hasPoint(step.place)" class="st__map" :class="{ 'st__map--main': step.doneAt }" @click="walkTo(step)">
+                    Открыть карту<template v-if="distance(step) && !step.doneAt"> · {{ distance(step) }}</template>
+                  </button>
+                  <button v-if="devTools && hasPoint(step.place) && !step.doneAt" class="st__dev" @click="teleport(step)">
+                    Переместиться к точке (dev)
+                  </button>
+
+                  <p
+                    v-if="outcomes[step.id]"
+                    class="st__result"
+                    :class="{ 'st__result--ok': outcomes[step.id]!.kind === 'done' }"
+                    role="status"
+                  >
+                    {{ message(outcomes[step.id]!) }}
+                    <template v-for="line in rewardLines(outcomes[step.id]!)" :key="line"><br />{{ line }}</template>
                   </p>
                 </div>
               </div>
-              <img v-if="quests.photos[step.id]" class="st__photo" :src="quests.photos[step.id]" alt="Твоё фото" />
-
-              <template v-if="!step.doneAt">
-                <fieldset v-if="step.kind === 'question' && step.options" class="st__options">
-                  <legend>{{ step.question }}</legend>
-                  <label v-for="(o, i) in step.options" :key="i" class="st__option" :class="{ on: answers[step.id] === i }">
-                    <input v-model="answers[step.id]" type="radio" :name="step.id" :value="i" />{{ o }}
-                  </label>
-                </fieldset>
-                <button v-if="step.kind === 'photo'" class="st__primary" :disabled="quests.busyStep !== null" @click="takePhoto(step)">
-                  <AppIcon name="camera" :size="20" />{{ quests.busyStep === step.id ? 'Проверяем…' : 'Сделать фото' }}
-                </button>
-                <button
-                  v-else
-                  class="st__primary"
-                  :disabled="quests.busyStep !== null || (step.kind === 'question' && answers[step.id] === undefined)"
-                  @click="send(step)"
-                >
-                  {{ quests.busyStep === step.id ? 'Проверяем…' : step.kind === 'question' ? 'Ответить' : 'Я на месте' }}
-                </button>
-              </template>
-              <button v-if="hasPoint(step.place)" class="st__map" :class="{ 'st__map--main': step.doneAt }" @click="walkTo(step)">
-                Открыть карту<template v-if="distance(step) && !step.doneAt"> · {{ distance(step) }}</template>
-              </button>
-              <button v-if="devTools && hasPoint(step.place) && !step.doneAt" class="st__dev" @click="teleport(step)">
-                Переместиться к точке (dev)
-              </button>
-
-              <p
-                v-if="outcomes[step.id]"
-                class="st__result"
-                :class="{ 'st__result--ok': outcomes[step.id]!.kind === 'done' }"
-                role="status"
-              >
-                {{ message(outcomes[step.id]!) }}
-                <template v-for="line in rewardLines(outcomes[step.id]!)" :key="line"><br />{{ line }}</template>
-              </p>
-            </div>
+            </Transition>
           </li>
         </ol>
 
@@ -577,6 +597,25 @@ $panel: #efeff6;
   transition: transform 0.2s var(--ease);
   .st--open & {
     transform: rotate(90deg);
+  }
+}
+.st__wrap {
+  overflow: hidden;
+}
+.expand-enter-active,
+.expand-leave-active {
+  transition:
+    height 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.25s ease;
+}
+.expand-enter-from,
+.expand-leave-to {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .expand-enter-active,
+  .expand-leave-active {
+    transition-duration: 0.01s;
   }
 }
 .st__body {
