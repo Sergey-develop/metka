@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { services } from '@/app/providers/services'
 import AppIcon from '@/components/ui/AppIcon.vue'
@@ -60,6 +60,22 @@ const { photo: placePhoto } = usePlaces()
 const heading = useMapHeading()
 /** the route card is swiped away like the fog hint: that ends the route */
 const routeSwipe = useSwipeAway(() => route.stop())
+/**
+ * The clan and tasks buttons stand 10px above the route card. The card is 105px on the mockup but grows
+ * with a long status (an error on three lines and «Повторить»), so its real height is measured.
+ */
+const routeCardEl = ref<ComponentPublicInstance | null>(null)
+const routeCardH = ref(105)
+let routeCardObserver: ResizeObserver | undefined
+watch(routeCardEl, (card) => {
+  routeCardObserver?.disconnect()
+  const el = card?.$el as HTMLElement | undefined
+  if (!el || typeof ResizeObserver === 'undefined') return
+  routeCardObserver = new ResizeObserver(() => (routeCardH.value = el.offsetHeight || 105))
+  routeCardObserver.observe(el)
+})
+onBeforeUnmount(() => routeCardObserver?.disconnect())
+const raisedStyle = computed(() => (routeCard.value ? { '--route-card-h': `${routeCardH.value}px` } : undefined))
 /** the clan / tasks sheets over the map (mockups «выдвигается клан», «выдвигаются задания») */
 const sheet = ref<'clan' | 'tasks' | null>(null)
 const router = useRouter()
@@ -437,11 +453,11 @@ onBeforeUnmount(() => {
     </Transition>
 
     <template v-if="!cardOpen">
-      <button class="sheet-btn sheet-btn--clan" :class="{ 'sheet-btn--raised': routeCard }" aria-label="Клан" @click="sheet = 'clan'">
+      <button class="sheet-btn sheet-btn--clan" :class="{ 'sheet-btn--raised': routeCard }" :style="raisedStyle" aria-label="Клан" @click="sheet = 'clan'">
         <ClanAvatar v-if="clan.membership" :url="clan.membership.clan.avatarUrl" :tag="clan.membership.clan.tag" :size="44" />
         <AppIcon v-else name="shield" :size="26" />
       </button>
-      <button class="sheet-btn sheet-btn--tasks" :class="{ 'sheet-btn--raised': routeCard }" :aria-label="tasks.ready ? `Задания: наград к получению — ${tasks.ready}` : 'Задания'" @click="sheet = 'tasks'">
+      <button class="sheet-btn sheet-btn--tasks" :class="{ 'sheet-btn--raised': routeCard }" :style="raisedStyle" :aria-label="tasks.ready ? `Задания: наград к получению — ${tasks.ready}` : 'Задания'" @click="sheet = 'tasks'">
         <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
           <path
             fill="currentColor"
@@ -528,6 +544,7 @@ onBeforeUnmount(() => {
       />
       <DistrictCard v-else-if="map.selectedDistrict" :district="map.selectedDistrict" @close="selectDistrict(null)" />
       <RouteCard
+        ref="routeCardEl"
         v-else-if="route.target"
         :place="route.target"
         :photo="placePhoto(route.target)"
@@ -743,8 +760,8 @@ onBeforeUnmount(() => {
   bottom: calc(var(--nav-height) + var(--safe-bottom) + 38px);
 }
 .sheet-btn--raised {
-  // the route card: 105 high, 16 above the tab bar, the buttons 10 above it (mockup)
-  bottom: calc(var(--nav-height) + var(--safe-bottom) + 16px + 105px + 10px);
+  // the route card: 105 high on the mockup (measured: --route-card-h), 16 above the tab bar, the buttons 10 above it
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + 16px + var(--route-card-h, 105px) + 10px);
 }
 .sheet-btn__badge {
   position: absolute;
