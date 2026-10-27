@@ -8,6 +8,8 @@ const props = defineProps<{
   photo: (b: MapBuilding) => string | null
   isFavorite: (b: MapBuilding) => boolean
   favBusy: string | null
+  /** a tag of its own instead of the rarity (Zavidovo places show their category) */
+  tagOf?: (b: MapBuilding) => string | null
 }>()
 /** `seen`: the card was swiped away; the parent drops it from `places` */
 const emit = defineEmits<{ open: [b: MapBuilding]; favorite: [b: MapBuilding]; seen: [b: MapBuilding] }>()
@@ -112,7 +114,8 @@ function swipe(dir: -1 | 1): void {
           <template v-else><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 12h-15m5-5-5 5 5 5" /></svg>Дальше</template>
         </span>
       </div>
-      <span class="card__tag" :class="`r-${current.rarity}`">{{ RARITY[current.rarity] }}</span>
+      <span v-if="tagOf?.(current)" class="card__tag card__tag--own">{{ tagOf(current) }}</span>
+      <span v-else class="card__tag" :class="`r-${current.rarity}`">{{ RARITY[current.rarity] }}</span>
       <button
         v-if="current.discoveredAt"
         class="card__fav"
@@ -223,6 +226,9 @@ function swipe(dir: -1 | 1): void {
   }
   &.r-epic {
     background: #f9b7fd;
+  }
+  &--own {
+    background: #c9f0dc;
   }
 }
 .card__fav {

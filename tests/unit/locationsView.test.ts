@@ -6,6 +6,7 @@ import LocationsView from '@/features/locations/LocationsView.vue'
 import { swipeSession } from '@/features/locations/places'
 import { services } from '@/app/providers/services'
 import { useMapStore } from '@/stores/map'
+import type { AreaPlace, AreaQuests } from '@/types/game'
 import { BUILDING, installFakeServices } from './helpers'
 
 async function mountView() {
@@ -14,6 +15,8 @@ async function mountView() {
     routes: [
       ...['/locations', '/map'].map((path) => ({ path, component: { template: '<div/>' } })),
       { path: '/locations/:id', name: 'location', component: { template: '<div/>' } },
+      { path: '/places/:id', name: 'place', component: { template: '<div/>' } },
+      { path: '/routes', component: { template: '<div/>' } },
     ],
   })
   await router.push('/locations')
@@ -133,5 +136,38 @@ describe('LocationsView', () => {
     await card.trigger('pointermove', { clientX: 130, pointerId: 1 })
     await card.trigger('pointerup', { clientX: 130, pointerId: 1 })
     expect(w.find('.card__hint').exists()).toBe(false)
+  })
+
+  it('shows the Zavidovo places by zone in the gallery and in the swipe deck', async () => {
+    const zav = (id: string, zone: AreaPlace['zone'], lat: number, lng: number, category: string): AreaPlace => ({
+      id, zone, category, name: id, description: 'Описание', idea: null, address: null, lat, lng, radiusM: 60,
+      isPartner: false, needsCheck: false, tags: ['free'], openingHours: null, phone: null, website: null, rewardXp: 10, rewardCoins: 0,
+    })
+    const quests: AreaQuests = {
+      routes: [],
+      places: [zav('zav-bay', 'bay', 56.59365, 36.51869, 'Природа / вода'), zav('zav-traktir', 'resort', 56.59561, 36.53686, 'Еда / партнёр')],
+      visits: [],
+      collections: [],
+    }
+    ;(services().api as unknown as { getAreaQuests: () => Promise<AreaQuests> }).getAreaQuests = async () => quests
+    useMapStore().position = { lat: 56.5937, lng: 36.5187, accuracyM: 5, timestamp: 0 }
+    const { w, router } = await mountView()
+    expect(w.text()).toContain('Все (5)')
+    const heads = w.findAll('.loc__row h2').map((h) => h.text())
+    expect(heads).toEqual(expect.arrayContaining(['Завидово · Набережная и бухта', 'Завидово · Ещё на курорте']))
+    // the bay card shows its bundled photo and opens the place page
+    const bayCard = w.findAll('.place').find((p) => p.find('.place__name').text() === 'zav-bay')!
+    expect(bayCard.find('img').attributes('src')).toContain('zav-bay')
+    await bayCard.find('.place__photo').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/places/zav-bay')
+
+    await router.push('/locations')
+    await w.findAll('[role="tab"]')[1]!.trigger('click')
+    await w.findAll('.who__opt')[0]!.trigger('click')
+    await w.findAll('.far__opt')[0]!.trigger('click') // up to 1 km from the bay: the Moscow buildings and «Трактиръ» are out
+    await w.find('.sw__next').trigger('click')
+    expect(w.find('.card:not(.card--under) h2').text()).toBe('zav-bay')
+    expect(w.find('.card:not(.card--under) .card__tag--own').text()).toBe('Природа / вода')
   })
 })

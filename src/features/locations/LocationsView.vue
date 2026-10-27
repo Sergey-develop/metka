@@ -7,13 +7,31 @@ import StateBlock from '@/components/ui/StateBlock.vue'
 import nearbyArt from '@/assets/locations/nearby.webp'
 import routesArt from '@/assets/locations/routes.webp'
 import twoHoursArt from '@/assets/locations/two-hours.webp'
-import type { MapBuilding } from '@/types/game'
+import { hasPoint, placeTarget, ZONE_TITLE } from '@/features/routes/routes'
+import { useAreaQuestsStore } from '@/stores/areaQuests'
+import { PLACE_ZONES, type MapBuilding } from '@/types/game'
 import { swipeSession as swipe, usePlaces, walkTime as walkTimeFor } from './places'
 import SwipeDeck from './SwipeDeck.vue'
 import SwipeSetup, { type Range } from './SwipeSetup.vue'
 
 const router = useRouter()
-const { buildings, loading, error, load, loadAll, distance, photo, isFavorite, favBusy, toggleFavorite } = usePlaces()
+const { buildings, loading, error, load, loadAll, distance, photo: buildingPhoto, isFavorite, favBusy, toggleFavorite } = usePlaces()
+
+// Zavidovo places (area_places) shown as location cards: `place:<id>`, photo and description of the place
+const quests = useAreaQuestsStore()
+const zavCards = computed(() =>
+  (quests.data?.places ?? []).filter(hasPoint).map((p) => ({ card: placeTarget(p), place: p })),
+)
+const zavCategory = computed(() => new Map(zavCards.value.map((z) => [z.card.id, z.place.category])))
+const isZav = (b: MapBuilding) => b.id.startsWith('place:')
+const photo = (b: MapBuilding) => (isZav(b) ? b.imageUrl : buildingPhoto(b))
+const tagOf = (b: MapBuilding) => zavCategory.value.get(b.id) ?? null
+/** the gallery's Zavidovo sections, by zone */
+const zavZones = computed(() =>
+  PLACE_ZONES.map((zone) => ({ zone, cards: zavCards.value.filter((z) => z.place.zone === zone).map((z) => z.card) })).filter(
+    (z) => z.cards.length > 0,
+  ),
+)
 
 // «С кем идешь?» does not filter yet: places have no such data
 const RANGE_M: Record<Range, number> = { near: 1000, district: 5000, city: Infinity }
@@ -21,7 +39,7 @@ const RANGE_M: Record<Range, number> = { near: 1000, district: 5000, city: Infin
 /** places within the chosen distance, nearest first; without a GPS fix the distance can't be checked, so all of them */
 const inRange = computed(() => {
   const limit = swipe.range ? RANGE_M[swipe.range] : Infinity
-  return [...buildings.value]
+  return [...buildings.value, ...zavCards.value.map((z) => z.card)]
     .filter((b) => (distance(b) ?? 0) <= limit)
     .sort((a, b) => (distance(a) ?? 0) - (distance(b) ?? 0) || a.name.localeCompare(b.name, 'ru'))
 })
@@ -55,10 +73,14 @@ const list = computed(() =>
 const walkTime = (b: MapBuilding) => walkTimeFor(distance(b))
 
 function openPlace(b: MapBuilding): void {
-  void router.push({ name: 'location', params: { id: b.id } })
+  if (isZav(b)) void router.push({ name: 'place', params: { id: b.slug } })
+  else void router.push({ name: 'location', params: { id: b.id } })
 }
 
-onMounted(loadAll)
+onMounted(() => {
+  loadAll()
+  void quests.load()
+})
 </script>
 
 <template>
@@ -85,7 +107,7 @@ onMounted(loadAll)
     <Transition :name="swipe.mode === 'swipe' ? 'mode-fwd' : 'mode-back'" mode="out-in">
       <div :key="swipe.mode" class="loc__mode">
         <div v-if="swipe.mode === 'gallery'" class="chips" role="group" aria-label="Категории">
-          <button class="chip on" aria-pressed="true">Все ({{ buildings.length }})</button>
+          <button class="chip on" aria-pressed="true">Все ({{ buildings.length + zavCards.length }})</button>
           <button v-for="c in STUB_CATEGORIES" :key="c" class="chip" disabled>{{ c }}</button>
         </div>
 
@@ -111,6 +133,7 @@ onMounted(loadAll)
             v-else
             :places="deck"
             :photo="photo"
+            :tag-of="tagOf"
             :is-favorite="isFavorite"
             :fav-busy="favBusy"
             @open="openPlace"
@@ -138,6 +161,23 @@ onMounted(loadAll)
                 <button class="pick__go" aria-label="Для дождливого дня" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h15m-4.5-4.5 4.5 4.5-4.5 4.5" /></svg></button>
               </div>
             </div>
+          </section>
+
+          <section v-for="z in zavZones" :key="z.zone">
+            <div class="loc__row">
+              <h2>Завидово · {{ ZONE_TITLE[z.zone] }}</h2>
+              <RouterLink to="/routes" class="more" aria-label="Все места Завидово"><AppIcon name="chevron" :size="18" /></RouterLink>
+            </div>
+            <ul class="places">
+              <li v-for="b in z.cards" :key="b.id" class="place">
+                <div class="place__photo" role="button" tabindex="0" :aria-label="`${b.name}: подробнее`" @click="openPlace(b)" @keydown.enter="openPlace(b)">
+                  <img v-if="photo(b)" :src="photo(b)!" alt="" loading="lazy" />
+                </div>
+                <h3 class="place__name">{{ b.name }}</h3>
+                <p v-if="tagOf(b)" class="place__meta"><FilledIcon name="pin" :size="16" />{{ tagOf(b) }}</p>
+                <p v-if="walkTime(b)" class="place__meta"><FilledIcon name="runner" :size="16" />{{ walkTime(b) }}</p>
+              </li>
+            </ul>
           </section>
 
           <section>
