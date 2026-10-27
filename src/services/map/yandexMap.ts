@@ -285,8 +285,9 @@ export class YandexMapService implements MapService {
       margin: init.margin,
       zoomRange: { min: MIN_ZOOM, max: 19 },
       restrictMapArea: MAP_AREA,
-      // no rotation/tilt: the game board is always north-up and flat
-      behaviors: ['drag', 'pinchZoom', 'scrollZoom', 'dblClick', 'oneFingerZoom'],
+      // no rotation/tilt: the game board is always north-up and flat;
+      // no tap zoom (dblClick, oneFingerZoom): taps are for buildings, zoom is pinch/scroll only
+      behaviors: ['drag', 'pinchZoom', 'scrollZoom'],
     })
     this.basemapVisible = init.zoom >= BASEMAP_MIN_ZOOM
     this.scheme = new api.YMapDefaultSchemeLayer({ customization: SCHEME_CUSTOMIZATION, visible: this.basemapVisible })
