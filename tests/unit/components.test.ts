@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -52,6 +52,37 @@ describe('BottomNav', () => {
     expect(tabs.map((t) => t.text())).toEqual(['Ar', 'Локации', '', 'Ивенты', 'Профиль'])
     expect(tabs[2]?.attributes('aria-label')).toBe('Карта')
     expect(w.find('[aria-current="page"]').text()).toBe('Ивенты')
+  })
+
+  it('hold and slide: the lens follows the finger, icons under it grow, letting go opens that tab', async () => {
+    const r = router()
+    await r.push('/scan')
+    const w = mount(BottomNav, { global: { plugins: [r] } })
+    const row = w.find('.nav__row')
+    Object.defineProperty(row.element, 'clientWidth', { value: 500 }) // 5 columns of 100px
+    const at = (type: string, x: number) => row.trigger(type, { pointerId: 1, clientX: x })
+
+    await w.findAll('.nav__item')[0]!.trigger('pointerdown', { pointerId: 1, clientX: 50 })
+    await at('pointermove', 53) // under the threshold: still a tap
+    expect(w.find('.nav__track--sliding').exists()).toBe(false)
+    await at('pointermove', 450) // over «Профиль»
+    expect(w.find('.nav__track--sliding').exists()).toBe(true)
+    expect(w.find('.nav__track').attributes('style')).toContain('translateX(400px)')
+    expect(w.findAll('.nav__item')[3]!.attributes('style')).toContain('scale(1.22)')
+    await at('pointerup', 450)
+    await flushPromises()
+    expect(r.currentRoute.value.path).toBe('/profile')
+    expect(w.find('.nav__track--sliding').exists()).toBe(false)
+  })
+
+  it('a plain tap does not slide or navigate by itself', async () => {
+    const r = router()
+    await r.push('/scan')
+    const w = mount(BottomNav, { global: { plugins: [r] } })
+    await w.findAll('.nav__item')[1]!.trigger('pointerdown', { pointerId: 1, clientX: 150 })
+    await w.find('.nav__row').trigger('pointerup', { pointerId: 1, clientX: 150 })
+    await flushPromises()
+    expect(r.currentRoute.value.path).toBe('/scan')
   })
 })
 

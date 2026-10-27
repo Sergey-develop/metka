@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import FilledIcon from './FilledIcon.vue'
 import type { FilledIconName } from './icons'
 
@@ -60,11 +60,54 @@ watch(activeColumn, (next, prev) => {
   )
 })
 
+// Telegram: hold the bar and slide — the swollen lens follows the finger over every tab (the map too),
+// the icons under it grow, and letting go opens the tab under the finger. A plain tap stays a tap.
+const router = useRouter()
+const row = ref<HTMLElement>()
+/** the finger's x within the row while sliding; null when not sliding */
+const dragX = ref<number | null>(null)
+let pointer: { id: number; x: number } | null = null
+const DRAG_START = 6
+const columnWidth = () => (row.value?.clientWidth ?? 0) / columns.length
+const rowX = (e: PointerEvent) => e.clientX - (row.value?.getBoundingClientRect().left ?? 0)
+
 const press = (e: PointerEvent) => {
-  if ((e.target as Element | null)?.closest('.nav__item')) pressed.value = true
+  if (!(e.target as Element | null)?.closest('.nav__item, .nav__center')) return
+  pressed.value = true
+  pointer = { id: e.pointerId, x: e.clientX }
 }
-const release = () => {
+const move = (e: PointerEvent) => {
+  if (!pointer || e.pointerId !== pointer.id) return
+  if (dragX.value === null) {
+    if (Math.abs(e.clientX - pointer.x) < DRAG_START) return
+    // from now on the row gets the pointer: the link under the finger gets no click
+    row.value?.setPointerCapture?.(e.pointerId)
+  }
+  const w = row.value?.clientWidth ?? 0
+  dragX.value = Math.min(Math.max(rowX(e), 0), w)
+}
+const release = (e: PointerEvent) => {
+  const x = dragX.value
   pressed.value = false
+  dragX.value = null
+  pointer = null
+  if (x === null || e.type !== 'pointerup') return
+  const col = Math.min(columns.length - 1, Math.floor(x / Math.max(1, columnWidth())))
+  if (!route.path.startsWith(columns[col]!)) void router.push(columns[col]!)
+}
+
+/** while sliding the lens sits under the finger instead of on its column */
+const trackStyle = computed(() => {
+  if (dragX.value === null) return { '--col': lensColumn.value }
+  return { '--col': lensColumn.value, transform: `translateX(${dragX.value - columnWidth() / 2}px)`, transition: 'transform 0.06s linear' }
+})
+/** icons near the finger grow, the closest one most (like a magnifier under the glass) */
+const itemStyle = (to: string) => {
+  if (dragX.value === null) return undefined
+  const w = columnWidth()
+  const center = (columns.indexOf(to) + 0.5) * w
+  const near = Math.max(0, 1 - Math.abs(dragX.value - center) / w)
+  return { transform: `scale(${1 + 0.22 * near})` }
 }
 
 const root = ref<HTMLElement>()
@@ -140,16 +183,24 @@ onBeforeUnmount(() => observer?.disconnect())
     </div>
 
     <div
+      ref="row"
       class="nav__row"
+      :class="{ 'nav__row--sliding': dragX !== null }"
       @pointerdown="press"
+      @pointermove="move"
       @pointerup="release"
       @pointercancel="release"
       @pointerleave="release"
+      @lostpointercapture="release"
     >
       <div
         class="nav__track"
-        :class="{ 'nav__track--hidden': !lensVisible, 'nav__track--pressed': pressed && lensVisible }"
-        :style="{ '--col': lensColumn }"
+        :class="{
+          'nav__track--hidden': !lensVisible && dragX === null,
+          'nav__track--pressed': pressed && (lensVisible || dragX !== null),
+          'nav__track--sliding': dragX !== null,
+        }"
+        :style="trackStyle"
         aria-hidden="true"
       >
         <div ref="lens" class="nav__lens" />
@@ -159,6 +210,7 @@ onBeforeUnmount(() => observer?.disconnect())
           <a
             :href="href"
             class="nav__item"
+            :style="itemStyle(tab.to)"
             :aria-current="isActive ? 'page' : undefined"
             @click="navigate"
           >
@@ -170,6 +222,7 @@ onBeforeUnmount(() => observer?.disconnect())
           <a
             :href="href"
             class="nav__center"
+            :style="itemStyle(center.to)"
             :aria-label="center.label"
             :aria-current="isActive ? 'page' : undefined"
             @click="navigate"
@@ -238,6 +291,8 @@ onBeforeUnmount(() => observer?.disconnect())
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   align-items: end;
+  // a slide along the bar is ours, not the browser's
+  touch-action: none;
 }
 
 .nav__track {
@@ -285,6 +340,21 @@ onBeforeUnmount(() => observer?.disconnect())
     background-color: rgb(255 255 255 / 28%);
   }
 
+  // sliding: a bigger, clearer lens — more glass, less frost, like a magnifier held over the bar
+  .nav__track--sliding & {
+    transform: scale(1.3, 1.22);
+    background:
+      radial-gradient(120% 90% at 50% 0%, rgb(255 255 255 / 45%) 0%, rgb(255 255 255 / 0%) 55%),
+      rgb(255 255 255 / 12%);
+    backdrop-filter: blur(2px) saturate(2) brightness(1.12);
+    -webkit-backdrop-filter: blur(2px) saturate(2) brightness(1.12);
+    box-shadow:
+      inset 0 1.5px 1px rgb(255 255 255 / 90%),
+      inset 0 -1.5px 3px rgb(255 255 255 / 35%),
+      inset 0 0 0 0.5px rgb(255 255 255 / 55%),
+      0 10px 24px rgb(0 40 90 / 20%);
+  }
+
   .nav__track--hidden & {
     transform: scale(0.6);
   }
@@ -303,10 +373,14 @@ onBeforeUnmount(() => observer?.disconnect())
   -webkit-tap-highlight-color: transparent;
   transition:
     opacity 0.2s var(--ease),
-    color 0.3s var(--ease);
+    color 0.3s var(--ease),
+    transform 0.15s var(--ease);
 
   &:active {
     opacity: 0.7;
+  }
+  .nav__row--sliding &:active {
+    opacity: 1;
   }
 
   &[aria-current='page'] {
