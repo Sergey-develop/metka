@@ -294,9 +294,25 @@ function fitRoute(): void {
   canvas.value?.fitArea([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], 17)
 }
 watch(() => route.route, fitRoute)
+/**
+ * On opening the map: as soon as the player's position is known, come down to them at street level
+ * instead of leaving the whole city in view. Once per opening, and not when the map already has a target
+ * (a place opened «на карте», a walking route, a category).
+ */
+let centeredOnPlayer = false
+function centerOnPlayerOnce(): void {
+  const at = map.position
+  if (centeredOnPlayer || !mapReady.value || !at) return
+  centeredOnPlayer = true
+  if (route.active || map.selectedBuildingId || mapCategory.value) return
+  canvas.value?.flyTo(at.lng, at.lat, at.accuracyM > 300 ? 14 : 16)
+}
+watch(() => map.position, centerOnPlayerOnce)
+
 function onMapReady(): void {
   mapReady.value = true
   fitRoute()
+  centerOnPlayerOnce()
 }
 
 function retry(): void {
