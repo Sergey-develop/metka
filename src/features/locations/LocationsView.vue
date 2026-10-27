@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import FilledIcon from '@/components/ui/FilledIcon.vue'
@@ -7,9 +7,10 @@ import StateBlock from '@/components/ui/StateBlock.vue'
 import nearbyArt from '@/assets/locations/nearby.webp'
 import routesArt from '@/assets/locations/routes.webp'
 import twoHoursArt from '@/assets/locations/two-hours.webp'
-import { hasPoint, placeTarget } from '@/features/routes/routes'
+import CategoryChips from '@/components/ui/CategoryChips.vue'
+import { hasPoint, PLACE_CHIPS, placeTarget } from '@/features/routes/routes'
 import { useAreaQuestsStore } from '@/stores/areaQuests'
-import type { MapBuilding } from '@/types/game'
+import type { MapBuilding, PlaceTag } from '@/types/game'
 import { swipeSession as swipe, usePlaces, walkTime as walkTimeFor } from './places'
 import SwipeDeck from './SwipeDeck.vue'
 import SwipeSetup, { type Range } from './SwipeSetup.vue'
@@ -51,14 +52,16 @@ function restartSwipe(): void {
 }
 
 /**
- * Not available from the backend yet (buildings_in_bbox has no category, opening hours need the OSM id):
- * shown as in the mockup but inactive. Wire them up once the server provides the data.
+ * The category chips of the map and the places tab. Only Zavidovo places have categories
+ * (area_places.tags); Moscow buildings have none yet, so a chosen category shows Zavidovo places.
  */
-const STUB_CATEGORIES = ['Музеи', 'Парки', 'Кафе', 'Рестораны']
+const category = ref<PlaceTag | null>(null)
+const zavTags = computed(() => new Map(zavCards.value.map((z) => [z.card.id, z.place.tags])))
+const inCategory = (b: MapBuilding) => !category.value || (zavTags.value.get(b.id)?.includes(category.value) ?? false)
 
 /** Moscow buildings and Zavidovo places in one list: discovered first, then the nearest */
 const list = computed(() =>
-  [...buildings.value, ...zavCards.value.map((z) => z.card)].sort((a, b) => {
+  [...buildings.value, ...zavCards.value.map((z) => z.card)].filter(inCategory).sort((a, b) => {
     if (!!a.discoveredAt !== !!b.discoveredAt) return a.discoveredAt ? -1 : 1
     return (distance(a) ?? Infinity) - (distance(b) ?? Infinity) || a.name.localeCompare(b.name, 'ru')
   }),
@@ -94,16 +97,13 @@ onMounted(() => {
     <div class="seg" :class="{ 'seg--swipe': swipe.mode === 'swipe' }" role="tablist" aria-label="Режим">
       <span class="seg__thumb" aria-hidden="true" />
       <button role="tab" :aria-selected="swipe.mode === 'gallery'" :class="{ on: swipe.mode === 'gallery' }" @click="swipe.mode = 'gallery'">Галерея</button>
-      <button role="tab" :aria-selected="swipe.mode === 'swipe'" :class="{ on: swipe.mode === 'swipe', dark: swipe.mode === 'swipe' }" @click="swipe.mode = 'swipe'">Свайп</button>
+      <button role="tab" :aria-selected="swipe.mode === 'swipe'" :class="{ on: swipe.mode === 'swipe' }" @click="swipe.mode = 'swipe'">Свайп</button>
     </div>
 
     <!-- the content slides the way the tab moved: Свайп is to the right of Галерея -->
     <Transition :name="swipe.mode === 'swipe' ? 'mode-fwd' : 'mode-back'" mode="out-in">
       <div :key="swipe.mode" class="loc__mode">
-        <div v-if="swipe.mode === 'gallery'" class="chips" role="group" aria-label="Категории">
-          <button class="chip on" aria-pressed="true">Все ({{ buildings.length + zavCards.length }})</button>
-          <button v-for="c in STUB_CATEGORIES" :key="c" class="chip" disabled>{{ c }}</button>
-        </div>
+        <CategoryChips v-if="swipe.mode === 'gallery'" v-model="category" :items="PLACE_CHIPS" />
 
         <template v-if="swipe.mode === 'swipe'">
           <SwipeSetup v-if="!swipe.range" @next="(c) => startSwipe(c.range)" />
@@ -171,7 +171,7 @@ onMounted(() => {
               action-label="Повторить"
               @action="load()"
             />
-            <StateBlock v-else-if="list.length === 0" kind="empty" title="Мест пока нет" />
+            <StateBlock v-else-if="list.length === 0" kind="empty" :title="category ? 'В этой категории мест пока нет' : 'Мест пока нет'" />
             <ul v-else class="places">
               <li v-for="b in list" :key="b.id" class="place">
                 <div class="place__photo" role="button" tabindex="0" :aria-label="`${b.name}: подробнее`" @click="openPlace(b)" @keydown.enter="openPlace(b)">
@@ -270,11 +270,8 @@ $card: #f3f3f9;
     font-size: 14px;
     font-weight: 500;
     transition: color 0.3s var(--ease);
+    // the active tab is black in both modes (the swipe mockup тиндер.png, owner 2026-10-27)
     &.on {
-      color: #232526;
-    }
-    // the swipe mockup (тиндер.png) shows its active tab in black
-    &.dark {
       color: #fff;
     }
   }
@@ -287,13 +284,10 @@ $card: #f3f3f9;
   left: 2px;
   width: calc(50% - 2px);
   border-radius: 8px;
-  background: #ebebeb;
-  transition:
-    transform 0.38s cubic-bezier(0.34, 1.2, 0.5, 1),
-    background-color 0.3s var(--ease);
+  background: #000;
+  transition: transform 0.38s cubic-bezier(0.34, 1.2, 0.5, 1);
   .seg--swipe & {
     transform: translateX(100%);
-    background: #000;
   }
 }
 
@@ -332,35 +326,6 @@ $card: #f3f3f9;
   .mode-fwd-leave-active,
   .mode-back-leave-active {
     transition-duration: 0.01s;
-  }
-}
-
-.chips {
-  display: flex;
-  gap: 6px;
-  margin-right: -16px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  &::-webkit-scrollbar {
-    display: none;
-  }
-}
-.chip {
-  flex: 0 0 auto;
-  height: 34px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 8px;
-  background: #f9f9fc;
-  color: #b9babc;
-  font-size: 13px;
-  white-space: nowrap;
-  &.on {
-    background: #ebebeb;
-    color: #232526;
-  }
-  &:disabled {
-    opacity: 1;
   }
 }
 

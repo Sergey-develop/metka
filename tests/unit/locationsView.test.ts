@@ -42,7 +42,9 @@ beforeEach(() => {
 describe('LocationsView', () => {
   it('lists discovered places first; every photo is shown as is, without blur or lock', async () => {
     const { w } = await mountView()
-    expect(w.text()).toContain('Все (3)')
+    // the category chips of the map; the active tab of the switch is black
+    expect(w.findAll('.cats .cat').map((c) => c.text())).toEqual(['Спорт', 'Культура', 'С детьми', 'Бесплатно', 'Еда', 'Отдых'])
+    expect(w.find('[role="tab"][aria-selected="true"]').classes()).toContain('on')
     const places = w.findAll('.place')
     expect(places).toHaveLength(3)
     expect(places[0]!.find('.place__name').text()).toBe(BUILDING.name)
@@ -145,14 +147,13 @@ describe('LocationsView', () => {
     })
     const quests: AreaQuests = {
       routes: [],
-      places: [zav('zav-bay', 'bay', 56.59365, 36.51869, 'Природа / вода'), zav('zav-traktir', 'resort', 56.59561, 36.53686, 'Еда / партнёр')],
+      places: [zav('zav-bay', 'bay', 56.59365, 36.51869, 'Природа / вода'), { ...zav('zav-traktir', 'resort', 56.59561, 36.53686, 'Еда / партнёр'), tags: ['food'] }],
       visits: [],
       collections: [],
     }
     ;(services().api as unknown as { getAreaQuests: () => Promise<AreaQuests> }).getAreaQuests = async () => quests
     useMapStore().position = { lat: 56.5937, lng: 36.5187, accuracyM: 5, timestamp: 0 }
     const { w, router } = await mountView()
-    expect(w.text()).toContain('Все (5)')
     // one «Локации» list, no sections of their own; discovered first, then the nearest — near the bay its places
     expect(w.findAll('.loc__row h2').map((h) => h.text())).not.toEqual(expect.arrayContaining([expect.stringContaining('Завидово')]))
     const names = w.findAll('.places .place__name').map((n) => n.text())
@@ -161,6 +162,12 @@ describe('LocationsView', () => {
     // the bay card shows its bundled photo and category, and opens the place page
     const bayCard = w.findAll('.place').find((p) => p.find('.place__name').text() === 'zav-bay')!
     expect(bayCard.find('.place__meta').text()).toContain('Природа / вода')
+    // «Еда» leaves the one café; a second tap brings everything back
+    const food = w.findAll('.cats .cat').find((c) => c.text() === 'Еда')!
+    await food.trigger('click')
+    expect(w.findAll('.places .place__name').map((n) => n.text())).toEqual(['zav-traktir'])
+    await food.trigger('click')
+    expect(w.findAll('.places .place__name')).toHaveLength(5)
     expect(bayCard.find('img').attributes('src')).toContain('zav-bay')
     await bayCard.find('.place__photo').trigger('click')
     await flushPromises()
