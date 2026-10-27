@@ -80,7 +80,8 @@ const move = (e: PointerEvent) => {
   if (!pointer || e.pointerId !== pointer.id) return
   if (dragX.value === null) {
     if (Math.abs(e.clientX - pointer.x) < DRAG_START) return
-    // from now on the row gets the pointer: the link under the finger gets no click
+    // from now on the row gets the pointer: the link under the finger gets no click. On touch the
+    // link held it implicitly; its lostpointercapture bubbles up here and must not end the slide (.self)
     row.value?.setPointerCapture?.(e.pointerId)
   }
   const w = row.value?.clientWidth ?? 0
@@ -191,7 +192,7 @@ onBeforeUnmount(() => observer?.disconnect())
       @pointerup="release"
       @pointercancel="release"
       @pointerleave="release"
-      @lostpointercapture="release"
+      @lostpointercapture.self="release"
     >
       <div
         class="nav__track"
@@ -210,6 +211,7 @@ onBeforeUnmount(() => observer?.disconnect())
           <a
             :href="href"
             class="nav__item"
+            draggable="false"
             :style="itemStyle(tab.to)"
             :aria-current="isActive ? 'page' : undefined"
             @click="navigate"
@@ -222,6 +224,7 @@ onBeforeUnmount(() => observer?.disconnect())
           <a
             :href="href"
             class="nav__center"
+            draggable="false"
             :style="itemStyle(center.to)"
             :aria-label="center.label"
             :aria-current="isActive ? 'page' : undefined"
@@ -291,8 +294,11 @@ onBeforeUnmount(() => observer?.disconnect())
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   align-items: end;
-  // a slide along the bar is ours, not the browser's
+  // a slide along the bar is ours, not the browser's (no panning, no link drag-and-drop)
   touch-action: none;
+  a {
+    -webkit-user-drag: none;
+  }
 }
 
 .nav__track {

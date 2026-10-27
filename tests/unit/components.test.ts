@@ -65,6 +65,9 @@ describe('BottomNav', () => {
     await w.findAll('.nav__item')[0]!.trigger('pointerdown', { pointerId: 1, clientX: 50 })
     await at('pointermove', 53) // under the threshold: still a tap
     expect(w.find('.nav__track--sliding').exists()).toBe(false)
+    // touch: the link held the finger implicitly and loses it to the row — that must not end the slide
+    await at('pointermove', 120) // a slide has started
+    w.findAll('.nav__item')[0]!.element.dispatchEvent(Object.assign(new Event('lostpointercapture', { bubbles: true }), { pointerId: 1 }))
     await at('pointermove', 450) // over «Профиль»
     expect(w.find('.nav__track--sliding').exists()).toBe(true)
     expect(w.find('.nav__track').attributes('style')).toContain('translateX(400px)')
