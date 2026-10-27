@@ -124,6 +124,16 @@ const CREDITS: Record<string, { author: string; license: string; url: string; ex
 }
 export const photoCredit = (p: AreaPlace | null) => (p ? (CREDITS[p.id] ?? null) : null)
 
+/** covers of the artifact collections (tasks page, «Коллекция и артефакты»): the owner's photos */
+const COLLECTION_COVER: Record<string, string> = {
+  'zav-elements': 'zav-bay',
+  'zav-postcards': 'zav-yacht-club',
+  'zav-trophies': 'zav-embankment',
+  'zav-forest-voices': 'zav-yamskoy-les',
+  'zav-two-capitals': 'zav-museum-road',
+}
+export const collectionPhoto = (id: string): string | null => BY_KEY.get(COLLECTION_COVER[id] ?? '') ?? null
+
 /** the step's own photo, else its place's */
 export const stepPhoto = (s: RouteStep): string | null => BY_KEY.get(s.slug) ?? placePhoto(s.place)
 

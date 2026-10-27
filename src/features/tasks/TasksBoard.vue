@@ -5,12 +5,16 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 import FilledIcon from '@/components/ui/FilledIcon.vue'
 import StateBlock from '@/components/ui/StateBlock.vue'
 import buildingArt from '@/assets/tasks/building.webp'
+import cameraArt from '@/assets/tasks/camera.webp'
 import cityArt from '@/assets/tasks/city.webp'
 import mapArt from '@/assets/tasks/map.webp'
 import shoeArt from '@/assets/tasks/shoe.webp'
 import towerArt from '@/assets/tasks/tower.webp'
+import { routePhoto } from '@/features/routes/photos'
+import { useAreaQuestsStore } from '@/stores/areaQuests'
 import { useTasksStore } from '@/stores/tasks'
 import type { GameTask, TaskKind } from '@/types/game'
+import { plural } from '@/utils/plural'
 import { timeLeft } from './tasksText'
 
 /**
@@ -24,7 +28,12 @@ defineProps<{ sheet?: boolean }>()
 const emit = defineEmits<{ more: [] }>()
 const tasks = useTasksStore()
 
-const ART: Record<TaskKind, string> = { discover: mapArt, cells: shoeArt, rare: buildingArt, memory: mapArt, districts: cityArt }
+const ART: Record<TaskKind, string> = { discover: mapArt, cells: shoeArt, rare: buildingArt, memory: cameraArt, districts: cityArt }
+
+// «Квесты» (mockup Tasks.jpg): the Zavidovo quest routes, between the tasks of the day and of the week
+const quests = useAreaQuestsStore()
+const questsDone = computed(() => quests.routes.filter((r) => r.completedAt).length)
+const stepsLabel = (n: number) => `${n} ${plural(n, ['задание', 'задания', 'заданий'])}`
 const done = (t: GameTask) => t.progress >= t.target
 const dayDone = computed(() => tasks.day.filter(done).length)
 const season = computed(() => tasks.state?.season ?? null)
@@ -41,6 +50,7 @@ const resetIn = computed(() => (tasks.state ? timeLeft(Date.parse(tasks.state.da
 
 onMounted(() => {
   void tasks.load()
+  void quests.load()
   clock = setInterval(() => {
     now.value = Date.now()
     // the day is over: fetch the new day's tasks
@@ -100,6 +110,29 @@ onBeforeUnmount(() => {
         </li>
       </ul>
 
+      <section v-if="!sheet && quests.routes.length" class="quests" aria-label="Квесты">
+        <header class="head head--quests">
+          <h2>Квесты</h2>
+          <span class="chip chip--count" :aria-label="`Пройдено ${questsDone} из ${quests.routes.length}`">{{ questsDone }}/{{ quests.routes.length }}</span>
+        </header>
+        <RouterLink
+          v-for="r in quests.routes"
+          :key="r.slug"
+          :to="{ name: 'route', params: { slug: r.slug } }"
+          class="quest"
+          :class="{ 'quest--done': r.completedAt }"
+          :style="routePhoto(r) ? { backgroundImage: `url(${routePhoto(r)})` } : undefined"
+        >
+          <h3 class="quest__title">{{ r.questTitle }}</h3>
+          <p class="quest__text">{{ r.description }}</p>
+          <span class="quest__chips">
+            <span class="quest__chip quest__chip--steps">{{ r.completedAt ? 'Пройден' : stepsLabel(r.steps.length) }}</span>
+            <span v-if="r.rewardCoins" class="quest__chip"><CoinIcon :size="16" />+{{ r.rewardCoins }}</span>
+            <span v-if="r.artifact" class="quest__chip">Артефакт «{{ r.artifact.title }}»</span>
+          </span>
+        </RouterLink>
+      </section>
+
       <article v-for="t in tasks.week" :key="t.slug" class="big">
         <div class="big__text">
           <p class="big__kind"><FilledIcon name="calendar" :size="16" />Задание недели</p>
@@ -118,7 +151,7 @@ onBeforeUnmount(() => {
           </span>
         </div>
         <div class="big__side">
-          <img class="big__art" :src="ART[t.kind]" alt="" />
+          <img v-if="sheet" class="big__art" :src="ART[t.kind]" alt="" />
           <template v-if="!sheet">
             <button v-if="done(t) && !t.claimed" class="coin coin--claim" :disabled="tasks.claiming.has(t.slug)" @click="tasks.claim(t.slug)">
               <CoinIcon :size="18" />Забрать {{ t.rewardCoins }}
@@ -152,7 +185,7 @@ onBeforeUnmount(() => {
           </span>
         </div>
         <div class="big__side">
-          <img class="big__art" :src="towerArt" alt="" />
+          <img v-if="sheet" class="big__art" :src="towerArt" alt="" />
           <template v-if="!sheet">
             <button v-if="season.completed && !season.claimed" class="coin coin--claim" @click="tasks.claimSeason()">
               <CoinIcon :size="18" />Забрать {{ season.rewardCoins }}
@@ -351,8 +384,78 @@ $blue: #0189ff;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  justify-content: space-between;
+  // the page has no art here (mockup Tasks.jpg): the reward sits bottom right
+  justify-content: flex-end;
   gap: 4px;
+}
+
+// «Квесты» (mockup Tasks.jpg): a photo banner per route, text on a darkened left side
+.head--quests {
+  margin-top: 36px;
+}
+.quests + .big {
+  margin-top: 32px;
+}
+.quest {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 130px;
+  margin-top: 4px;
+  padding: 14px 12px 12px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #2d7fd6 center / cover no-repeat;
+  color: #fff;
+  text-decoration: none;
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgb(1 70 140 / 75%), rgb(1 70 140 / 25%) 70%, rgb(1 70 140 / 0%));
+  }
+  > * {
+    position: relative;
+  }
+}
+.quest--done {
+  opacity: 0.75;
+}
+.quest__title {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 21px;
+}
+.quest__text {
+  max-width: 75%;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 15px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.quest__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+.quest__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  line-height: 16px;
+  color: #000;
+}
+.quest__chip--steps {
+  background: #ffe27e;
 }
 .big__reward {
   margin-top: 10px;

@@ -1,8 +1,3 @@
-import type { StyleCollectionId } from '@/types/game'
-import constructivismArt from '@/assets/collections/constructivism.webp'
-import stalinistArt from '@/assets/collections/stalinist.webp'
-import waterTowerArt from '@/assets/collections/water-tower.webp'
-
 /** the tasks page's header (PageHero): height and the row of the back button and title, px below the safe area */
 export const TASKS_HERO = { height: 150, rowY: 55 } as const
 
@@ -15,12 +10,4 @@ export function timeLeft(ms: number): string {
   if (d > 0) return `${d}д ${h}ч ${m}мин`
   if (h > 0) return `${h}ч ${m}мин`
   return `${m}мин`
-}
-
-/** «Коллекции по стилям» (migration 021); photos are cut from the mockup (задания.png) */
-export const COLLECTION_INFO: Record<StyleCollectionId, { title: string; art: string }> = {
-  constructivism: { title: 'Конструктивизм', art: constructivismArt },
-  // the OSM tag marks the whole Stalinist style, not only the seven skyscrapers
-  stalinist: { title: 'Сталинский ампир', art: stalinistArt },
-  water_tower: { title: 'Водонапорные башни', art: waterTowerArt },
 }

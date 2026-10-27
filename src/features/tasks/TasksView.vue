@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import PageHero from '@/components/ui/PageHero.vue'
-import StyleCollectionsBlock from './StyleCollectionsBlock.vue'
+import ArtifactsBlock from './ArtifactsBlock.vue'
 import TasksBoard from './TasksBoard.vue'
 import { TASKS_HERO } from './tasksText'
 
 /**
- * «Задания» (mockup задания.png): the tasks board, style collections and rarity of finds — the same
+ * «Задания» (mockup задания.png): the tasks board, quests, artifact collections and rarity — the same
  * content as the tasks sheet on the map expanded.
  */
 const router = useRouter()
@@ -18,7 +18,7 @@ const router = useRouter()
 
     <div class="tv__body">
       <TasksBoard />
-      <StyleCollectionsBlock />
+      <ArtifactsBlock />
     </div>
   </main>
 </template>
