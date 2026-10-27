@@ -138,7 +138,7 @@ describe('LocationsView', () => {
     expect(w.find('.card__hint').exists()).toBe(false)
   })
 
-  it('shows the Zavidovo places by zone in the gallery and in the swipe deck', async () => {
+  it('shows the Zavidovo places in the «Локации» list and in the swipe deck', async () => {
     const zav = (id: string, zone: AreaPlace['zone'], lat: number, lng: number, category: string): AreaPlace => ({
       id, zone, category, name: id, description: 'Описание', idea: null, address: null, lat, lng, radiusM: 60,
       isPartner: false, needsCheck: false, tags: ['free'], openingHours: null, phone: null, website: null, rewardXp: 10, rewardCoins: 0,
@@ -153,10 +153,14 @@ describe('LocationsView', () => {
     useMapStore().position = { lat: 56.5937, lng: 36.5187, accuracyM: 5, timestamp: 0 }
     const { w, router } = await mountView()
     expect(w.text()).toContain('Все (5)')
-    const heads = w.findAll('.loc__row h2').map((h) => h.text())
-    expect(heads).toEqual(expect.arrayContaining(['Завидово · Набережная и бухта', 'Завидово · Ещё на курорте']))
-    // the bay card shows its bundled photo and opens the place page
+    // one «Локации» list, no sections of their own; discovered first, then the nearest — near the bay its places
+    expect(w.findAll('.loc__row h2').map((h) => h.text())).not.toEqual(expect.arrayContaining([expect.stringContaining('Завидово')]))
+    const names = w.findAll('.places .place__name').map((n) => n.text())
+    expect(names.slice(0, 3)).toEqual([BUILDING.name, 'zav-bay', 'zav-traktir'])
+    expect(names).toHaveLength(5)
+    // the bay card shows its bundled photo and category, and opens the place page
     const bayCard = w.findAll('.place').find((p) => p.find('.place__name').text() === 'zav-bay')!
+    expect(bayCard.find('.place__meta').text()).toContain('Природа / вода')
     expect(bayCard.find('img').attributes('src')).toContain('zav-bay')
     await bayCard.find('.place__photo').trigger('click')
     await flushPromises()
