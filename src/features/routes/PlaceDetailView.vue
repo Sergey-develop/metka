@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import FilledIcon from '@/components/ui/FilledIcon.vue'
 import StateBlock from '@/components/ui/StateBlock.vue'
-import { useAreaQuestsStore } from '@/stores/areaQuests'
+import { services } from '@/app/providers/services'
+import CoinIcon from '@/components/ui/CoinIcon.vue'
+import { useAreaQuestsStore, type StepOutcome } from '@/stores/areaQuests'
 import { useMapStore } from '@/stores/map'
 import { useRouteStore } from '@/stores/route'
 import { distanceMeters, formatDistance } from '@/utils/geo'
+import { message, rewardLines } from './outcome'
 import { placePhoto } from './photos'
 import { hasPoint, placeTarget, TAG_LABEL } from './routes'
 
@@ -24,6 +27,21 @@ const distance = computed(() =>
   map.position && place.value && hasPoint(place.value) ? formatDistance(distanceMeters(map.position, place.value)) : null,
 )
 const tel = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`
+
+const visited = computed(() => quests.visited.has(props.id))
+const outcome = ref<StepOutcome | null>(null)
+async function checkIn(): Promise<void> {
+  if (!place.value) return
+  const result = await quests.checkIn(place.value)
+  if (result) outcome.value = result
+}
+
+/** dev with mocks only: puts the mock GPS at the place */
+const devTools = services().devTools
+function teleport(): void {
+  const p = place.value
+  if (devTools && p && hasPoint(p)) devTools.teleport(p.lat, p.lng)
+}
 
 function walkTo(): void {
   const p = place.value
@@ -86,6 +104,24 @@ onMounted(() => void quests.load())
           <dd>{{ place.idea }}</dd>
         </template>
       </dl>
+
+      <section v-if="hasPoint(place)" class="pd__task" :class="{ 'pd__task--done': visited }">
+        <p class="pd__task-title">{{ visited ? 'Ты здесь отметился' : place.isPartner ? 'Задание партнёра' : 'Самостоятельное задание' }}</p>
+        <p class="pd__task-text">
+          {{ visited ? 'Награда получена.' : 'Приди сюда и отметься.' }}
+          <template v-if="!visited">
+            Награда: +{{ place.rewardXp }} опыта<template v-if="place.rewardCoins"> · <CoinIcon :size="14" /> {{ place.rewardCoins }}</template>
+          </template>
+        </p>
+        <button v-if="!visited" class="pd__primary pd__primary--inline" :disabled="quests.busyPlace !== null" @click="checkIn">
+          {{ quests.busyPlace === place.id ? 'Проверяем…' : 'Отметиться здесь' }}
+        </button>
+        <button v-if="devTools && !visited" class="pd__dev" @click="teleport">Переместиться к месту (dev)</button>
+        <p v-if="outcome" class="pd__result" :class="{ 'pd__result--ok': outcome.kind === 'done' }" role="status">
+          {{ outcome.kind === 'done' && outcome.xp > 0 ? 'Отметка засчитана!' : message(outcome) }}
+          <template v-for="line in rewardLines(outcome)" :key="line"><br />{{ line }}</template>
+        </p>
+      </section>
 
       <section v-if="routes.length" class="pd__routes">
         <h3>Есть в маршрутах</h3>
@@ -222,6 +258,50 @@ $card: #f3f3f9;
   }
   &:empty {
     display: none;
+  }
+}
+.pd__task {
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 14px;
+  background: #eaf4ff;
+  &--done {
+    background: $card;
+  }
+}
+.pd__task-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #000;
+}
+.pd__task-text {
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: #3c3c43;
+}
+.pd__primary--inline {
+  margin-top: 12px;
+  &:disabled {
+    opacity: 0.5;
+  }
+}
+.pd__dev {
+  margin-top: 8px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: #8e8e93;
+  font-size: 13px;
+  text-decoration: underline;
+}
+.pd__result {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 19px;
+  color: #b4441c;
+  &--ok {
+    color: #1a7f37;
   }
 }
 .pd__routes {

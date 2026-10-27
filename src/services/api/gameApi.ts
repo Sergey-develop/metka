@@ -16,6 +16,7 @@ import {
   type AdminGameInfo,
   type AreaPlace,
   type AreaQuests,
+  type CheckInResult,
   type PlaceTag,
   type ArtifactRef,
   type AvatarKey,
@@ -996,6 +997,8 @@ export class GameApi implements CandidateMatcher {
         openingHours: strOrNull(p, 'openingHours'),
         phone: strOrNull(p, 'phone'),
         website: strOrNull(p, 'website'),
+        rewardXp: p.rewardXp === undefined ? 0 : num(p, 'rewardXp'),
+        rewardCoins: p.rewardCoins === undefined ? 0 : num(p, 'rewardCoins'),
       }
     }
     return {
@@ -1038,6 +1041,11 @@ export class GameApi implements CandidateMatcher {
         }
       }),
       places: arr(o.places, 'places').map(place),
+      // before migration 028 there are no check-ins
+      visits: o.visits === undefined ? [] : arr(o.visits, 'visits').map((v) => {
+        const x = obj(v, 'visit')
+        return { placeId: str(x, 'placeId'), visitedAt: str(x, 'visitedAt') }
+      }),
       collections: arr(o.collections, 'collections').map((row) => {
         const c = obj(row, 'collection')
         return {
@@ -1049,6 +1057,35 @@ export class GameApi implements CandidateMatcher {
           }),
         }
       }),
+    }
+  }
+
+  /** check_in_place(): «Отметиться» at a place, once; the server checks the position */
+  async checkInPlace(placeId: string, position: { lat: number; lng: number; accuracyM: number }): Promise<CheckInResult> {
+    // not retried, as complete_route_step
+    const o = obj(
+      await unwrap(
+        this.client.rpc('check_in_place', {
+          p_place_id: placeId,
+          p_lat: position.lat,
+          p_lng: position.lng,
+          p_accuracy_m: position.accuracyM,
+        }),
+      ),
+      'check_in_place',
+    )
+    const status = oneOf(o, 'status', ['done', 'already_done', 'too_far'] as const)
+    if (status === 'too_far') return { status, distanceM: num(o, 'distanceM'), radiusM: num(o, 'radiusM') }
+    if (status === 'already_done') return { status }
+    const reward = obj(o.reward, 'reward')
+    return {
+      status,
+      reward: { xp: num(reward, 'xp'), coins: num(reward, 'coins') },
+      artifacts: arr(o.artifacts, 'artifacts').map((v) => {
+        const a = obj(v, 'artifact')
+        return { id: str(a, 'id'), title: str(a, 'title') }
+      }),
+      profile: parseProfileStats(o.profile),
     }
   }
 

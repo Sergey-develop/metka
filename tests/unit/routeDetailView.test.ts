@@ -27,6 +27,8 @@ const BAY: AreaPlace = {
   openingHours: null,
   phone: null,
   website: null,
+  rewardXp: 10,
+  rewardCoins: 0,
 }
 
 const QUESTS: AreaQuests = {
@@ -67,6 +69,7 @@ const QUESTS: AreaQuests = {
       openingHours: 'пт–сб 09:00–23:00', phone: '+7 903 806-79-97', website: 'https://yatraktir.ru',
     },
   ],
+  visits: [],
   collections: [{ id: 'zav-trophies', title: 'Трофеи маршрутов', items: [{ id: 'first-discovery', title: 'Первое открытие', how: 'Дойди до бухты', earnedAt: null }] }],
 }
 
@@ -82,6 +85,7 @@ async function mountAt(path: string, component: typeof RouteDetailView | typeof 
     history: createMemoryHistory(),
     routes: [
       { path: '/routes', component: { template: '<div/>' } },
+      { path: '/routes/random', name: 'random-route', component: { template: '<div/>' } },
       { path: '/routes/:slug', name: 'route', component: { template: '<div/>' } },
       { path: '/map', component: { template: '<div/>' } },
       { path: '/places/:id', name: 'place', component: { template: '<div/>' } },
@@ -182,7 +186,7 @@ describe('RouteDetailView', () => {
 describe('RoutesView', () => {
   it('lists the routes, the places by zone and the artifacts', async () => {
     const { w } = await mountAt('/routes', RoutesView)
-    expect(w.find('.rc__title').text()).toBe('Завидово: поймай волну')
+    expect(w.find('.zr__list .rc__title').text()).toBe('Завидово: поймай волну')
     // bundled photos: the route cover and the bay
     expect(w.find('.rc__cover').attributes('src')).toContain('zav-catch-wave')
     await w.findAll('.zr__tabs button')[1]!.trigger('click')

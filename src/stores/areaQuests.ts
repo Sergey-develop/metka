@@ -3,7 +3,7 @@ import { computed, ref, shallowRef } from 'vue'
 import { services } from '@/app/providers/services'
 import { type ApiError, toApiError } from '@/services/api/errors'
 import { GeolocationError } from '@/services/geolocation/types'
-import type { AreaQuests, ArtifactRef, RouteStep, StepResult } from '@/types/game'
+import type { AreaPlace, AreaQuests, ArtifactRef, CheckInResult, RouteStep, StepResult } from '@/types/game'
 import type { GameAreaId } from '@/utils/gameAreas'
 import { useProfileStore } from './profile'
 
@@ -70,6 +70,16 @@ export const useAreaQuestsStore = defineStore('areaQuests', () => {
     }
   }
 
+  /** a fresh GPS fix for a check on the server */
+  async function freshPosition(): Promise<{ lat: number; lng: number; accuracyM: number } | StepOutcome> {
+    try {
+      const fix = await services().geolocation.getCurrentPosition({ timeoutMs: 15_000, maxAgeMs: 5_000 })
+      return { lat: fix.lat, lng: fix.lng, accuracyM: Math.max(fix.accuracyM, 1) }
+    } catch (e) {
+      return { kind: 'no_position', code: e instanceof GeolocationError ? e.code : 'unavailable' }
+    }
+  }
+
   /**
    * Sends the step to the server: with a fresh GPS fix when the step has a place, and the chosen
    * option for a question. The server decides; nothing is marked done before it answers.
@@ -80,12 +90,9 @@ export const useAreaQuestsStore = defineStore('areaQuests', () => {
     try {
       let position: { lat: number; lng: number; accuracyM: number } | null = null
       if (step.place) {
-        try {
-          const fix = await services().geolocation.getCurrentPosition({ timeoutMs: 15_000, maxAgeMs: 5_000 })
-          position = { lat: fix.lat, lng: fix.lng, accuracyM: Math.max(fix.accuracyM, 1) }
-        } catch (e) {
-          return { kind: 'no_position', code: e instanceof GeolocationError ? e.code : 'unavailable' }
-        }
+        const fix = await freshPosition()
+        if ('kind' in fix) return fix
+        position = fix
       }
       let result: StepResult
       try {
@@ -110,6 +117,38 @@ export const useAreaQuestsStore = defineStore('areaQuests', () => {
     }
   }
 
+  const visited = computed(() => new Set((data.value?.visits ?? []).map((v) => v.placeId)))
+  const busyPlace = ref<string | null>(null)
+
+  function markVisited(placeId: string): void {
+    if (!data.value || visited.value.has(placeId)) return
+    data.value = { ...data.value, visits: [...data.value.visits, { placeId, visitedAt: new Date().toISOString() }] }
+  }
+
+  /** «Отметиться» at a place: the server checks the position, rewards once */
+  async function checkIn(place: AreaPlace): Promise<StepOutcome | null> {
+    if (busyPlace.value) return null
+    busyPlace.value = place.id
+    try {
+      const position = await freshPosition()
+      if ('kind' in position) return position
+      let result: CheckInResult
+      try {
+        result = await services().api.checkInPlace(place.id, position)
+      } catch (e) {
+        return { kind: 'error', error: toApiError(e) }
+      }
+      if (result.status === 'too_far') return { kind: 'too_far', distanceM: result.distanceM }
+      markVisited(place.id)
+      if (result.status === 'already_done') return { kind: 'done', xp: 0, coins: 0, artifacts: [], routeCompleted: false }
+      useProfileStore().applyStats(result.profile)
+      markEarned(result.artifacts)
+      return { kind: 'done', xp: result.reward.xp, coins: result.reward.coins, artifacts: result.artifacts, routeCompleted: false }
+    } finally {
+      busyPlace.value = null
+    }
+  }
+
   function setPhoto(stepId: string, url: string): void {
     const old = photos.value[stepId]
     if (old) URL.revokeObjectURL(old)
@@ -123,5 +162,5 @@ export const useAreaQuestsStore = defineStore('areaQuests', () => {
     error.value = null
   }
 
-  return { area, data, routes, loading, error, busyStep, photos, load, complete, setPhoto, reset }
+  return { area, data, routes, loading, error, busyStep, busyPlace, visited, photos, load, complete, checkIn, setPhoto, reset }
 })

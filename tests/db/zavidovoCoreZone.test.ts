@@ -49,7 +49,8 @@ const inZone = async (lat: number, lng: number) =>
   ).rows[0]!.v
 
 beforeAll(async () => {
-  t = await createTestDb()
+  // Zavidovo as migration 027 left it; check-ins and «Голоса леса» come in 028 (placeCheckIns.test.ts)
+  t = await createTestDb({ stopBefore: '20261027000028' })
 })
 
 describe('zavidovo core zone', () => {

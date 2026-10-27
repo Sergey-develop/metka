@@ -81,6 +81,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'locations/:id', name: 'location', component: () => import('@/features/locations/LocationDetailView.vue'), props: true },
       // Zavidovo: quest routes, places and artifacts (migration 026)
       { path: 'routes', name: 'routes', component: () => import('@/features/routes/RoutesView.vue') },
+      { path: 'routes/random', name: 'random-route', component: () => import('@/features/routes/RandomRouteView.vue') },
       { path: 'places/:id', name: 'place', component: () => import('@/features/routes/PlaceDetailView.vue'), props: true },
       { path: 'routes/:slug', name: 'route', component: () => import('@/features/routes/RouteDetailView.vue'), props: true },
       { path: 'collection', name: 'collection', component: () => import('@/features/collection/CollectionView.vue') },

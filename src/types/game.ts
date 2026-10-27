@@ -362,6 +362,9 @@ export interface AreaPlace {
   openingHours: string | null
   phone: string | null
   website: string | null
+  /** reward for «Отметиться» (migration 028) */
+  rewardXp: number
+  rewardCoins: number
 }
 
 export const STEP_KINDS = ['checkin', 'photo', 'question'] as const
@@ -418,8 +421,16 @@ export interface ArtifactCollection {
 export interface AreaQuests {
   routes: QuestRoute[]
   places: AreaPlace[]
+  /** the player's check-ins (migration 028) */
+  visits: { placeId: string; visitedAt: string }[]
   collections: ArtifactCollection[]
 }
+
+/** check_in_place() (migration 028) */
+export type CheckInResult =
+  | { status: 'done'; reward: { xp: number; coins: number }; artifacts: ArtifactRef[]; profile: ProfileStats | null }
+  | { status: 'already_done' }
+  | { status: 'too_far'; distanceM: number; radiusM: number }
 
 /** complete_route_step() (migration 026) */
 export type StepResult =

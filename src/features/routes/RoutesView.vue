@@ -39,6 +39,19 @@ const zones = computed(() =>
     (z) => z.places.length > 0,
   ),
 )
+/** demo step «ближайшая метка»: the closest places not visited yet, when the player is near Zavidovo */
+const NEARBY_MAX_M = 3000
+const nearby = computed(() => {
+  const at = map.position
+  if (!at) return []
+  return (quests.data?.places ?? [])
+    .filter((p) => hasPoint(p) && !quests.visited.has(p.id) && (!category.value || p.tags.includes(category.value)))
+    .map((p) => ({ place: p, meters: distanceMeters(at, p as AreaPlace & { lat: number; lng: number }) }))
+    .filter((x) => x.meters <= NEARBY_MAX_M)
+    .sort((a, b) => a.meters - b.meters)
+    .slice(0, 3)
+})
+
 const earned = computed(() => (quests.data?.collections ?? []).flatMap((c) => c.items).filter((i) => i.earnedAt).length)
 const artifactsTotal = computed(() => (quests.data?.collections ?? []).reduce((n, c) => n + c.items.length, 0))
 
@@ -80,6 +93,10 @@ onMounted(() => void quests.load())
     <StateBlock v-else-if="!quests.data" kind="loading" title="Загружаем Завидово…" />
 
     <template v-else-if="tab === 'routes'">
+      <RouterLink :to="{ name: 'random-route' }" class="rc rc--random">
+        <span class="rc__title">Случайное Завидово</span>
+        <span class="rc__text">Ответь на четыре вопроса — подберём прогулку под настроение.</span>
+      </RouterLink>
       <ul class="zr__list">
         <li v-for="r in quests.data.routes" :key="r.id">
           <RouterLink :to="{ name: 'route', params: { slug: r.slug } }" class="rc" :class="{ 'rc--done': r.completedAt }">
@@ -104,13 +121,24 @@ onMounted(() => void quests.load())
     <template v-else-if="tab === 'places'">
       <CategoryChips v-model="category" class="zr__cats" :items="PLACE_CHIPS" />
       <StateBlock v-if="zones.length === 0" kind="empty" title="Таких мест пока нет" />
+      <section v-if="nearby.length" class="zr__zone">
+        <h2>Рядом с тобой</h2>
+        <ul class="pl">
+          <li v-for="n in nearby" :key="n.place.id" class="pl__item pl__item--near">
+            <RouterLink :to="{ name: 'place', params: { id: n.place.id } }" class="pl__body">
+              <p class="pl__name">{{ n.place.name }}</p>
+              <p class="pl__meta"><span>{{ formatDistance(n.meters) }}</span><span>+{{ n.place.rewardXp }} опыта за отметку</span></p>
+            </RouterLink>
+          </li>
+        </ul>
+      </section>
       <section v-for="z in zones" :key="z.zone" class="zr__zone">
         <h2>{{ ZONE_TITLE[z.zone] }}</h2>
         <ul class="pl">
           <li v-for="p in z.places" :key="p.id" class="pl__item">
             <img v-if="placePhoto(p)" class="pl__photo" :src="placePhoto(p)!" alt="" loading="lazy" />
             <RouterLink :to="{ name: 'place', params: { id: p.id } }" class="pl__body">
-              <p class="pl__name">{{ p.name }}</p>
+              <p class="pl__name">{{ p.name }}<span v-if="quests.visited.has(p.id)" class="pl__visited" aria-label="отмечено"> ✓</span></p>
               <p class="pl__meta">
                 <span>{{ p.category }}</span>
                 <span v-if="p.isPartner" class="pl__tag pl__tag--partner">Партнёр</span>
@@ -228,6 +256,14 @@ $card: #f3f3f9;
   &--done {
     background: #e8f4ff;
   }
+  &--random {
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, #0189ff, #6ec1ff);
+    color: #fff;
+    .rc__text {
+      color: #fff;
+    }
+  }
 }
 .rc__cover {
   display: block;
@@ -319,6 +355,12 @@ $card: #f3f3f9;
   padding: 12px;
   border-radius: 12px;
   background: $card;
+}
+.pl__item--near {
+  background: #eaf4ff;
+}
+.pl__visited {
+  color: $blue;
 }
 .pl__photo {
   flex: none;
