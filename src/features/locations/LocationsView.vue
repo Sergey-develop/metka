@@ -5,7 +5,6 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 import FilledIcon from '@/components/ui/FilledIcon.vue'
 import StateBlock from '@/components/ui/StateBlock.vue'
 import nearbyArt from '@/assets/locations/nearby.webp'
-import routesArt from '@/assets/locations/routes.webp'
 import twoHoursArt from '@/assets/locations/two-hours.webp'
 import CategoryChips from '@/components/ui/CategoryChips.vue'
 import { hasPoint, PLACE_CHIPS, placeBadges, placeTarget } from '@/features/routes/routes'
@@ -201,12 +200,6 @@ onMounted(() => {
               </li>
             </ul>
           </section>
-
-          <RouterLink to="/routes" class="routes" :style="{ backgroundImage: `url(${routesArt})` }">
-            <h2>Авторские маршруты</h2>
-            <p>Квесты по Завидово: набережная,<br />«Ямской лес» и Государева дорога</p>
-            <span class="routes__soon">Открыть</span>
-          </RouterLink>
         </template>
       </div>
     </Transition>
@@ -515,46 +508,5 @@ $card: #f3f3f9;
     flex: none;
     color: #0189ff;
   }
-}
-
-.routes {
-  position: relative;
-  display: block;
-  height: 154px;
-  color: inherit;
-  text-decoration: none;
-  margin-top: 10px;
-  padding: 14px 12px;
-  border-radius: 12px;
-  background-color: #e3eefd;
-  background-size: cover;
-  background-position: center;
-  h2 {
-    font-size: 15px;
-    font-weight: 500;
-    line-height: 18px;
-  }
-  p {
-    margin-top: 4px;
-    font-size: 13px;
-    line-height: 15px;
-    color: #72777f;
-  }
-}
-.routes__soon {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  display: inline-flex;
-  align-items: center;
-  height: 22px;
-  padding: 0 9px;
-  border-radius: 11px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: #0189ff;
 }
 </style>

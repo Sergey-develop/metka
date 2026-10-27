@@ -25,6 +25,8 @@ beforeAll(async () => {
   before = randomUUID()
   await t.createUser(before, `b${before.slice(0, 8)}`)
   await t.applyRemainingMigrations()
+  // 032 hides the centre's seed landmarks (Moscow is only the Varshavskaya quarter); this test is about 030
+  await t.db.query(`update public.buildings set publish_status = 'published' where id = $1`, [SEED.gum.id])
 })
 
 describe('scan by location for every player', () => {
