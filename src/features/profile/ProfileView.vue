@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { services } from '@/app/providers/services'
 import AppIcon from '@/components/ui/AppIcon.vue'
+import FilledIcon from '@/components/ui/FilledIcon.vue'
 import CountUp from '@/components/ui/CountUp.vue'
 import LevelProgress from '@/components/ui/LevelProgress.vue'
 import PlayerAvatar from '@/components/ui/PlayerAvatar.vue'
@@ -426,9 +427,20 @@ watch(
           </div>
           <button class="more" aria-label="Открыть дневник" @click="diaryOpen = true"><AppIcon name="chevron" :size="18" /></button>
         </div>
-        <div class="strip">
+        <div v-if="!memories.loaded && memories.loading" class="strip" aria-label="Загружаем дневник">
+          <span v-for="i in PLACEHOLDERS" :key="`ds${i}`" class="strip__item strip__item--skeleton" />
+        </div>
+        <RouterLink v-else-if="diaryPhotos.length === 0" to="/scan" class="empty">
+          <span class="empty__icon" aria-hidden="true"><AppIcon name="camera" :size="24" /></span>
+          <span class="empty__text">
+            <b>Здесь будут твои фото</b>
+            <small>Сканируй здание в AR — снимок попадёт в дневник</small>
+          </span>
+          <span class="empty__cta">Открыть AR</span>
+        </RouterLink>
+        <div v-else class="strip">
           <img v-for="ph in diaryPhotos" :key="ph.id" class="strip__item" :src="ph.url" :alt="ph.name" />
-          <span v-for="i in Math.max(0, PLACEHOLDERS - diaryPhotos.length)" :key="`d${i}`" class="strip__item" />
+          <span v-for="i in Math.max(0, PLACEHOLDERS - diaryPhotos.length)" :key="`d${i}`" class="strip__item strip__item--slot" aria-hidden="true">+</span>
         </div>
       </section>
 
@@ -471,12 +483,26 @@ watch(
           </div>
           <RouterLink v-if="!isOther" to="/collection" class="more" aria-label="Открыть коллекцию"><AppIcon name="chevron" :size="18" /></RouterLink>
         </div>
-        <div class="strip">
+        <div v-if="!isOther && !collection.loaded && collection.loading" class="strip" aria-label="Загружаем коллекцию">
+          <span v-for="i in PLACEHOLDERS" :key="`cs${i}`" class="strip__item strip__item--skeleton" />
+        </div>
+        <p v-else-if="bestFinds.length === 0 && isOther" class="empty empty--quiet">
+          <span class="empty__text"><small>Игрок пока ничего не открыл</small></span>
+        </p>
+        <RouterLink v-else-if="bestFinds.length === 0" to="/map" class="empty">
+          <span class="empty__icon" aria-hidden="true"><FilledIcon name="pin" :size="24" /></span>
+          <span class="empty__text">
+            <b>Пока ни одной находки</b>
+            <small>Открой первое здание на карте — лучшие появятся здесь</small>
+          </span>
+          <span class="empty__cta">На карту</span>
+        </RouterLink>
+        <div v-else class="strip">
           <template v-for="f in bestFinds" :key="f.id">
             <img v-if="f.url" class="strip__item" :src="f.url" :alt="f.name" />
-            <span v-else class="strip__item" :aria-label="f.name" />
+            <span v-else class="strip__item strip__item--name">{{ f.name }}</span>
           </template>
-          <span v-for="i in Math.max(0, PLACEHOLDERS - bestFinds.length)" :key="`c${i}`" class="strip__item" />
+          <span v-for="i in Math.max(0, PLACEHOLDERS - bestFinds.length)" :key="`c${i}`" class="strip__item strip__item--slot" aria-hidden="true">+</span>
         </div>
       </section>
 
@@ -922,8 +948,102 @@ $gray: #6d6d6e;
   width: 88px;
   height: 108px;
   border-radius: 12px;
-  background: #d5d1d1;
+  background: #e3eefd;
   object-fit: cover;
+  // a free place in the strip: an outline with a «+», not a grey block that looks unloaded
+  &--slot {
+    display: grid;
+    place-items: center;
+    border: 1.5px dashed #b9d4f3;
+    background: transparent;
+    font-size: 24px;
+    font-weight: 300;
+    color: #9ec2ec;
+  }
+  // a find without a photo: its name on a soft colour
+  &--name {
+    display: flex;
+    align-items: flex-end;
+    padding: 8px;
+    background: linear-gradient(160deg, #6fb8f6, #2f86d9);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 14px;
+    color: #fff;
+    overflow: hidden;
+  }
+  // still loading: a soft shimmer
+  &--skeleton {
+    background: linear-gradient(100deg, #eef1f6 30%, #f8f9fb 50%, #eef1f6 70%) 0 0 / 300% 100%;
+    animation: strip-shimmer 1.3s ease-in-out infinite;
+  }
+}
+@keyframes strip-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .strip__item--skeleton {
+    animation: none;
+  }
+}
+// nothing yet: one invitation instead of four empty tiles
+.empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 108px;
+  margin: 0;
+  padding: 16px;
+  border: 1.5px dashed #b9d4f3;
+  border-radius: 12px;
+  background: #f4f9ff;
+  color: inherit;
+  text-decoration: none;
+  &--quiet {
+    min-height: 0;
+    justify-content: center;
+  }
+}
+.empty__icon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #dcecfc;
+  color: #0189ff;
+}
+.empty__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  b {
+    font-size: 15px;
+    font-weight: 600;
+    color: #000;
+  }
+  small {
+    font-size: 13px;
+    line-height: 17px;
+    color: #6d6d72;
+  }
+}
+.empty__cta {
+  flex: none;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #0189ff;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
 }
 .strip--badges {
   gap: 8px;

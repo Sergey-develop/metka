@@ -80,7 +80,7 @@ const statsApi = () => services().api as unknown as StatsApi
 async function mountProfile(userId?: string) {
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: ['/profile', '/map', '/clan', '/album', '/collection'].map((path) => ({ path, component: { template: '<div/>' } })),
+    routes: ['/profile', '/map', '/clan', '/album', '/collection', '/scan'].map((path) => ({ path, component: { template: '<div/>' } })),
   })
   await router.push('/profile')
   const w = mount(ProfileView, { props: userId ? { userId } : {}, global: { plugins: [router] } })
@@ -99,6 +99,15 @@ beforeEach(() => {
 })
 
 describe('ProfileView', () => {
+  it('an empty diary and collection invite to start, instead of grey tiles that look unloaded', async () => {
+    const w = await mountProfile()
+    const empty = w.findAll('.empty')
+    expect(empty.map((e) => e.find('b').text())).toEqual(['Здесь будут твои фото', 'Пока ни одной находки'])
+    expect(empty[0]!.attributes('href')).toBe('/scan')
+    expect(empty[1]!.attributes('href')).toBe('/map')
+    expect(w.findAll('.strip__item:not(.strip__item--skeleton)')).toHaveLength(0)
+  })
+
   it('shows the header, level and share of Moscow from real data', async () => {
     const w = await mountProfile()
     expect(w.find('h1').text()).toBe('Михаил')
