@@ -242,6 +242,10 @@ $card: #f3f3f9;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  // a list: no browser indent and bullets
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 .rc {
   display: flex;
@@ -347,6 +351,9 @@ $card: #f3f3f9;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 .pl__item {
   display: flex;
@@ -456,6 +463,9 @@ $card: #f3f3f9;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 .ac__item {
   display: flex;
