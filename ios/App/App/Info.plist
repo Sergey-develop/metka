@@ -70,6 +70,12 @@
 	<string>Камера нужна, чтобы сфотографировать фасад здания и открыть его в коллекции.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Местоположение нужно, чтобы показать здания рядом и подтвердить, что вы находитесь у здания.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Чтобы туман на карте рассеивался, пока вы гуляете с телефоном в кармане, «Метке» нужен доступ к местоположению всегда.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

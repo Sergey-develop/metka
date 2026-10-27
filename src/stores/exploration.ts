@@ -34,8 +34,9 @@ const contains = (o: Bbox, i: Bbox) => o.minLng <= i.minLng && o.minLat <= i.min
 
 /**
  * "Исследование": the player's explored cells (server-authoritative) and the GPS tracker that
- * reveals new ones. Tracking runs only while the player has it switched on and the app is in the
- * foreground (main.ts pauses it in the background). Separate from discovered buildings.
+ * reveals new ones. Tracking runs while the player has it switched on; in a browser only in the
+ * foreground (main.ts pauses it in the background), in the native app also with the phone in a pocket
+ * (background location). Separate from discovered buildings.
  */
 export const useExplorationStore = defineStore('exploration', () => {
   /** player's intent; tracking itself also needs permission and the foreground */
@@ -132,11 +133,14 @@ export const useExplorationStore = defineStore('exploration', () => {
     return t
   }
 
-  /** keep the screen on exactly while exploring is on (GPS stops with the screen in a browser) */
+  /**
+   * keep the screen on exactly while exploring is on — in a browser only: GPS stops with the screen
+   * there; the native app explores in the background, so the screen may go dark (battery)
+   */
   function syncWakeLock(): void {
     const wakeLock = services().wakeLock
     wakeUnsub ??= wakeLock.onChange((active) => (screenKeptOn.value = active))
-    if (enabled.value) void wakeLock.keepOn().then((ok) => (screenKeptOn.value = ok))
+    if (enabled.value && !services().backgroundExploration) void wakeLock.keepOn().then((ok) => (screenKeptOn.value = ok))
     else void wakeLock.release().then(() => (screenKeptOn.value = false))
   }
 

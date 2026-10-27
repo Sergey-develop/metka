@@ -22,6 +22,7 @@
     "osm:import-pois": "node --experimental-strip-types tools/osm-import/import-pois.ts"
   },
   "dependencies": {
+    "@capacitor-community/background-geolocation": "1.2.26",
     "@capacitor/android": "^8.5.3",
     "@capacitor/app": "^8.1.2",
     "@capacitor/camera": "^8.2.5",

@@ -126,6 +126,7 @@ export function installFakeServices(): FakeServices {
     },
     mocked: false,
     devTools: null,
+    backgroundExploration: false,
   } satisfies AppServices
   setServices(services)
   return { camera, geolocation, recognition, api }

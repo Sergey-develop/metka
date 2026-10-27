@@ -16,6 +16,9 @@ const config: CapacitorConfig = {
   android: {
     // ship https-only; cleartext stays disabled
     allowMixedContent: false,
+    // background exploration: without it Android stops location updates after 5 minutes in the background
+    // (@capacitor-community/background-geolocation README, issue #89)
+    useLegacyBridge: true,
   },
   ios: {
     contentInset: 'never',

@@ -9,6 +9,7 @@ import { MediaDevicesCameraPreview, type CameraPreviewService } from '@/services
 import type { CameraService } from '@/services/camera/types'
 import { WebCameraService } from '@/services/camera/webCamera'
 import { CapacitorGeolocationService } from '@/services/geolocation/capacitorGeolocation'
+import { BackgroundWatchGeolocationService } from '@/services/geolocation/backgroundGeolocation'
 import type { GeolocationService } from '@/services/geolocation/types'
 import { OsrmRoutingService } from '@/services/routing/osrmRouting'
 import type { RoutingService } from '@/services/routing/types'
@@ -55,6 +56,8 @@ export interface AppServices {
   mocked: boolean
   /** dev-only controls (mock geolocation teleport); null in production */
   devTools: { teleport: (lat: number, lng: number) => void } | null
+  /** exploration keeps going with the app in the background (native apps: background location) */
+  backgroundExploration: boolean
 }
 
 let current: AppServices | null = null
@@ -103,16 +106,20 @@ export async function createServices(config: AppConfig): Promise<AppServices> {
       recognition: new mocks.MockRecognitionService(api),
       mocked: true,
       devTools: { teleport: (lat, lng) => geolocation.setPosition(lat, lng) },
+      backgroundExploration: false,
     }
   }
 
   const manifestUrl = config.recognitionManifestUrl
   const geolocation = new CapacitorGeolocationService()
+  const native = Capacitor.isNativePlatform()
+  // in the app the exploration watch keeps running in the background; the browser stops GPS there anyway
+  const trackerGeolocation = native ? new BackgroundWatchGeolocationService(geolocation) : geolocation
   return {
     ...base,
-    camera: Capacitor.isNativePlatform() ? new CapacitorCameraService() : new WebCameraService(),
+    camera: native ? new CapacitorCameraService() : new WebCameraService(),
     geolocation,
-    createExplorationTracker: (userId) => newTracker(geolocation, api, userId),
+    createExplorationTracker: (userId) => newTracker(trackerGeolocation, api, userId),
     recognition: new EmbeddingRecognitionService({
       loadModel: manifestUrl ? () => loadOnnxModelFromUrl(manifestUrl) : null,
       decoder: new CanvasImageDecoder(),
@@ -120,5 +127,6 @@ export async function createServices(config: AppConfig): Promise<AppServices> {
     }),
     mocked: false,
     devTools: null,
+    backgroundExploration: native,
   }
 }

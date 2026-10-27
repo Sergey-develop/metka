@@ -108,8 +108,11 @@ const DEFAULTS: TrackerOptions = {
   batchSize: 10,
   flushIntervalMs: 15_000,
   signalLostMs: 30_000,
-  maxPointAgeMs: 25 * 60_000,
-  maxBuffered: 600,
+  // a walk in the background may wait hours to be sent (the phone throttles the app): the server takes
+  // points up to 6 h old (migration 029), the client keeps them a little less
+  maxPointAgeMs: 5.5 * 3_600_000,
+  // ≈ 5 h of walking at one accepted point per 4 s
+  maxBuffered: 5000,
 }
 
 export class GpsExplorationTracker implements ExplorationTracker {

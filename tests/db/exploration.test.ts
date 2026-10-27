@@ -113,7 +113,7 @@ describe('record_exploration', () => {
       { lat: LAT, lng: LNG, accuracy: 60, t: now - 5000 },
       { lat: 59.93, lng: 30.31, accuracy: 5, t: now - 4000 }, // St Petersburg
       { lat: LAT, lng: LNG, accuracy: 5, t: now + 5 * 60_000 }, // future
-      { lat: LAT, lng: LNG, accuracy: 5, t: now - 2 * 3600_000 }, // stale
+      { lat: LAT, lng: LNG, accuracy: 5, t: now - 7 * 3600_000 }, // stale: older than 6 h (migration 029)
       { lat: 'x', lng: LNG, accuracy: 5, t: now },
     ])
     expect(r.accepted).toBe(0)
@@ -167,6 +167,22 @@ describe('record_exploration', () => {
     await t.db.query(`update public.exploration_state set window_cells = 1999, window_start = now() where user_id = $1`, [u])
     const r = await record(u, walk(LAT, LNG, 5, 15, 5))
     expect(r.newCells).toHaveLength(1)
+  })
+
+  it('a walk sent hours later (background) is accepted, and the cap counts walk time, not upload time', async () => {
+    const u = await newUser()
+    const threeHoursAgo = Date.now() - 3 * 3600_000
+    const old = await record(u, walk(LAT, LNG, 6, 15, 5, threeHoursAgo))
+    expect(old.accepted).toBe(6)
+    expect(old.newCells.length).toBeGreaterThan(0)
+    // the cap was nearly used up an hour before this walk: a new 10 minutes of walking, a new allowance
+    await t.db.query(`update public.exploration_state set window_cells = 1999, window_start = $2 where user_id = $1`, [
+      u,
+      new Date(threeHoursAgo - 3600_000).toISOString(),
+    ])
+    const later = await record(u, walk(LAT + 0.002, LNG, 6, 15, 5, threeHoursAgo + 20 * 60_000))
+    expect(later.accepted).toBe(6)
+    expect(later.newCells.length).toBeGreaterThan(1)
   })
 
   it('requires a signed-in player and validates input', async () => {

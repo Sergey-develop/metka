@@ -31,18 +31,21 @@ async function bootstrap(): Promise<void> {
 
   // mobile lifecycle: refresh tokens, pause GPS, re-check permissions on resume
   services.lifecycle.onActiveChange((active) => {
-    services.auth.setForeground(active)
+    const exploration = useExplorationStore(pinia)
+    // exploring in the background (native app) needs a fresh session token for its uploads
+    services.auth.setForeground(active || (services.backgroundExploration && exploration.enabled))
     const map = useMapStore(pinia)
     if (active) {
       map.invalidate()
       useOutlinesStore(pinia).invalidate()
-      // exploration runs in the foreground only: resume if the player left it on
-      void useExplorationStore(pinia).resume()
+      // resume if the player left it on (a no-op when it kept running in the background)
+      void exploration.resume()
       useScanStore(pinia).onResume()
       if (useAuthStore(pinia).status === 'signed_in' && router.currentRoute.value.name === 'map') void map.startTracking()
     } else {
       map.stopTracking()
-      void useExplorationStore(pinia).pause()
+      // the native app keeps exploring with the phone in a pocket; the browser cannot
+      if (!services.backgroundExploration) void exploration.pause()
     }
   })
   services.lifecycle.onDeepLink((url) => {
