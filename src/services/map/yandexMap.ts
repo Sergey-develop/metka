@@ -235,6 +235,11 @@ function element(className: string, html = ''): HTMLElement {
   return el
 }
 
+function applyHeading(el: HTMLElement, deg: number | null): void {
+  el.classList.toggle('metka-me--heading', deg !== null)
+  if (deg !== null) el.style.setProperty('--heading', `${deg}deg`)
+}
+
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 interface Drawn<T, E> {
@@ -266,7 +271,8 @@ export class YandexMapService implements MapService {
   private readonly districts = new Map<string, Drawn<DistrictOverview, YMapFeature>>()
   private readonly districtLabels = new Map<string, YMapMarker>()
   private percentPin: { marker: YMapMarker; key: string } | null = null
-  private me: { dot: YMapMarker; halo: YMapFeature } | null = null
+  private me: { dot: YMapMarker; halo: YMapFeature; el: HTMLElement } | null = null
+  private heading: number | null = null
   private routeLine: { line: YMapFeature; end: YMapMarker; path: readonly LngLatPair[] } | null = null
   private explored: { feature: YMapFeature; cells: readonly Cell[] } | null = null
   private recent: { feature: YMapFeature; cells: readonly Cell[] } | null = null
@@ -363,6 +369,11 @@ export class YandexMapService implements MapService {
     this.renderRecent(scene)
     this.renderFog(scene)
     this.renderRoute(scene)
+  }
+
+  setHeading(deg: number | null): void {
+    this.heading = deg
+    if (this.me) applyHeading(this.me.el, deg)
   }
 
   destroy(): void {
@@ -787,6 +798,9 @@ export class YandexMapService implements MapService {
     const center: LngLatPair = [p.lng, p.lat]
     const halo = { type: 'Polygon' as const, coordinates: [circle(center, Math.max(p.accuracyM, 5))] }
     if (!this.me) {
+      // the beam and arrow turn with the heading (the map is always north-up); the dot stays on top
+      const el = element('metka-me', '<span class="metka-me__beam"></span><span class="metka-me__arrow"></span><span class="metka-me__dot"></span>')
+      applyHeading(el, this.heading)
       this.me = {
         // above the fog: the player is always visible, explored or not
         halo: new api.YMapFeature({
@@ -794,7 +808,8 @@ export class YandexMapService implements MapService {
           geometry: halo,
           style: { zIndex: 50, fill: MAP_COLORS.accent, fillOpacity: 0.14, stroke: [{ width: 0 }], interactive: false },
         }),
-        dot: new api.YMapMarker({ coordinates: center, zIndex: 200, source: TOP_MARKERS_SOURCE }, element('metka-me')),
+        dot: new api.YMapMarker({ coordinates: center, zIndex: 200, source: TOP_MARKERS_SOURCE }, el),
+        el,
       }
       this.map!.addChild(this.me.halo)
       this.map!.addChild(this.me.dot)

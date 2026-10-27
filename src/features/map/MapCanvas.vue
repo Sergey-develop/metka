@@ -14,6 +14,8 @@ const props = defineProps<{
   /** game buildings already drawn as footprints: their fallback points are hidden */
   buildingsWithOutline: ReadonlySet<string>
   position: GeoFix | null
+  /** where the player faces, degrees from north; null = no compass, no arrow */
+  heading?: number | null
   selectedBuildingId: string | null
   selectedDistrictId: string | null
   selectedOutlineId: number | null
@@ -87,6 +89,7 @@ async function mount(): Promise<void> {
     await instance.mount(container.value, { center: [37.615, 55.74], zoom: 10, margin: margin() })
     if (map !== instance) return
     instance.render(scene())
+    instance.setHeading(props.heading ?? null)
     showCity(false)
     emit('ready')
   } catch (e) {
@@ -123,6 +126,11 @@ watch(
       props.route,
     ] as const,
   () => map?.render(scene()),
+)
+// apart from render(): the compass changes many times a second and only turns the arrow
+watch(
+  () => props.heading ?? null,
+  (deg) => map?.setHeading(deg),
 )
 watch(
   () => [props.padding.top, props.padding.bottom] as const,
@@ -273,15 +281,58 @@ defineExpose({ flyTo, fitDistrict, showCity, fitArea })
   display: none;
 }
 
+/* the player: a dot; with a compass also an arrow and a soft beam towards where they face */
 :deep(.metka-me) {
+  position: relative;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+:deep(.metka-me__dot) {
+  position: absolute;
+  left: -7px;
+  top: -7px;
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  transform: translate(-50%, -50%);
   background: var(--c-accent);
   border: 3px solid #fff;
   box-shadow: 0 1px 6px rgb(23 61 102 / 30%);
-  pointer-events: none;
+}
+:deep(.metka-me__beam),
+:deep(.metka-me__arrow) {
+  position: absolute;
+  display: none;
+  transform: rotate(var(--heading, 0deg));
+}
+:deep(.metka-me--heading .metka-me__beam),
+:deep(.metka-me--heading .metka-me__arrow) {
+  display: block;
+}
+:deep(.metka-me__beam) {
+  left: -36px;
+  top: -36px;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side, rgb(77 177 250 / 45%), rgb(77 177 250 / 0%));
+  clip-path: polygon(50% 50%, 20% 0, 80% 0);
+}
+/* a triangle just outside the dot, pointing out of it */
+:deep(.metka-me__arrow) {
+  left: -6px;
+  top: -6px;
+  width: 12px;
+  height: 12px;
+  transform: rotate(var(--heading, 0deg)) translateY(-12px);
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--c-accent-strong);
+    clip-path: polygon(50% 0, 100% 100%, 0 100%);
+    filter: drop-shadow(0 0 1px #fff);
+  }
 }
 
 :deep(.metka-route-end) {

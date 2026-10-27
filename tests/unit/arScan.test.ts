@@ -5,7 +5,7 @@ import { ApiError } from '@/services/api/errors'
 import { MediaDevicesCameraPreview } from '@/services/camera/preview'
 import { CameraError } from '@/services/camera/types'
 import { GeolocationError, type GeoFix } from '@/services/geolocation/types'
-import { DeviceOrientationService, rearCameraHeading } from '@/services/orientation/deviceOrientation'
+import { DeviceOrientationService, facingHeading, rearCameraHeading } from '@/services/orientation/deviceOrientation'
 import type { HeadingReading } from '@/services/orientation/types'
 import type { AppPermissionState } from '@/services/shared'
 import { useArScanStore } from '@/stores/arScan'
@@ -74,7 +74,7 @@ function setup(opts: { cameraError?: CameraError; geoPermission?: AppPermissionS
   }
   setServices({ ...base, ...fakes })
   const heading = (deg: number, accuracyDeg: number | null = 10, upright = true) =>
-    emitHeading({ deg, accuracyDeg, upright, timestamp: Date.now() })
+    emitHeading({ deg, facingDeg: deg, accuracyDeg, upright, timestamp: Date.now() })
   return {
     ...fakes,
     getBuildingOutlines,
@@ -308,6 +308,18 @@ describe('rearCameraHeading', () => {
   })
 })
 
+describe('facingHeading', () => {
+  it('a phone lying flat faces where its top edge points', () => {
+    expect(facingHeading(0, 0, 0)).toBeCloseTo(0, 6)
+    expect(facingHeading(90, 0, 0)).toBeCloseTo(270, 6)
+    expect(facingHeading(270, 10, -5)).toBeCloseTo(90, 0)
+  })
+
+  it('an upright phone faces where its camera looks, the same as the scanner', () => {
+    for (const alpha of [0, 45, 200]) expect(facingHeading(alpha, 80, 5)).toBeCloseTo(rearCameraHeading(alpha, 80, 5), 6)
+  })
+})
+
 describe('DeviceOrientationService', () => {
   function fakeWindow(withAbsolute: boolean) {
     const target = new EventTarget()
@@ -321,7 +333,7 @@ describe('DeviceOrientationService', () => {
     const readings: HeadingReading[] = []
     const stop = new DeviceOrientationService(win).watchHeading((r) => readings.push(r), () => undefined)
     fire('deviceorientation', { webkitCompassHeading: 123, webkitCompassAccuracy: 15, alpha: 10, beta: 80, gamma: 0, absolute: false })
-    expect(readings[0]).toMatchObject({ deg: 123, accuracyDeg: 15, upright: true })
+    expect(readings[0]).toMatchObject({ deg: 123, facingDeg: 123, accuracyDeg: 15, upright: true })
     stop()
   })
 

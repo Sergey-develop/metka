@@ -56,6 +56,8 @@ export interface MapService {
   mount(container: HTMLElement, init: MapInit): Promise<void>
   /** Declarative: diffed against what is drawn; cheap to call on every change. */
   render(scene: MapScene): void
+  /** Where the player faces, degrees clockwise from north; null hides the arrow. Cheap: called many times a second. */
+  setHeading(deg: number | null): void
   /** Called after the map settles (not on every animation frame). */
   onViewport(handler: (viewport: MapViewport) => void): void
   onSelect(handler: (target: MapTarget) => void): void

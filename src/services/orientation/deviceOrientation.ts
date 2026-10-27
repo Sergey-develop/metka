@@ -6,20 +6,37 @@ type IosOrientationEventClass = typeof DeviceOrientationEvent & { requestPermiss
 
 const RAD = Math.PI / 180
 
+/** horizontal (east, north) part of the device's −z axis (rear camera) and +y axis (top edge) */
+function deviceAxes(alpha: number, beta: number, gamma: number) {
+  const sX = Math.sin(beta * RAD)
+  const cX = Math.cos(beta * RAD)
+  const cY = Math.cos(gamma * RAD)
+  const sY = Math.sin(gamma * RAD)
+  const cZ = Math.cos(alpha * RAD)
+  const sZ = Math.sin(alpha * RAD)
+  return {
+    camera: [-cZ * sY - sZ * sX * cY, -sZ * sY + cZ * sX * cY] as const,
+    top: [-sZ * cX, cZ * cX] as const,
+  }
+}
+
+const bearing = ([east, north]: readonly [number, number]): number => (Math.atan2(east, north) / RAD + 360) % 360
+
 /**
  * Compass heading of the rear camera from absolute Euler angles (W3C DeviceOrientation spec,
  * "compass heading" example): the horizontal direction of the device's −z axis.
  */
 export function rearCameraHeading(alpha: number, beta: number, gamma: number): number {
-  const sX = Math.sin(beta * RAD)
-  const cY = Math.cos(gamma * RAD)
-  const sY = Math.sin(gamma * RAD)
-  const cZ = Math.cos(alpha * RAD)
-  const sZ = Math.sin(alpha * RAD)
-  const vx = -cZ * sY - sZ * sX * cY
-  const vy = -sZ * sY + cZ * sX * cY
-  const deg = Math.atan2(vx, vy) / RAD
-  return (deg + 360) % 360
+  return bearing(deviceAxes(alpha, beta, gamma).camera)
+}
+
+/**
+ * Where the player faces: of the phone's top edge and rear camera, the one closer to horizontal —
+ * the top edge for a phone lying flat (as a map is held), the camera for an upright one.
+ */
+export function facingHeading(alpha: number, beta: number, gamma: number): number {
+  const { camera, top } = deviceAxes(alpha, beta, gamma)
+  return bearing(Math.hypot(...camera) > Math.hypot(...top) ? camera : top)
 }
 
 /** the camera looks roughly at the horizon (not at the ground or the sky) */
@@ -59,17 +76,20 @@ export class DeviceOrientationService implements OrientationService {
     const handler = (event: Event): void => {
       const e = event as IosOrientationEvent
       let deg: number
+      let facingDeg: number
       let accuracyDeg: number | null = null
       if (typeof e.webkitCompassHeading === 'number' && e.webkitCompassHeading >= 0) {
-        deg = e.webkitCompassHeading
+        // iOS already reports the top edge when flat and the camera when upright
+        deg = facingDeg = e.webkitCompassHeading
         accuracyDeg = typeof e.webkitCompassAccuracy === 'number' && e.webkitCompassAccuracy >= 0 ? e.webkitCompassAccuracy : null
       } else if (e.absolute && e.alpha !== null && e.beta !== null && e.gamma !== null) {
         deg = rearCameraHeading(e.alpha, e.beta, e.gamma)
+        facingDeg = facingHeading(e.alpha, e.beta, e.gamma)
       } else {
         return
       }
       received = true
-      onReading({ deg, accuracyDeg, upright: isUpright(e.beta, e.gamma), timestamp: Date.now() })
+      onReading({ deg, facingDeg, accuracyDeg, upright: isUpright(e.beta, e.gamma), timestamp: Date.now() })
     }
     this.win.addEventListener(eventName, handler)
     const timer = setTimeout(() => {
