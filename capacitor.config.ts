@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 /**
  * CAP_SERVER_URL (set at `cap sync` time, e.g. in the iOS build workflow): the app shows the deployed
- * site (Netlify) instead of the bundled `dist`. The Yandex Maps key is restricted by Referer, which a
+ * site (GitHub Pages, https://sergey-develop.github.io/metka/) instead of the bundled `dist`. The Yandex Maps key is restricted by Referer, which a
  * bundled app (capacitor://localhost) does not satisfy; the site's own domain does. Native plugins
  * (geolocation, camera, app lifecycle) keep working through the Capacitor bridge. Unset → bundle.
  */
