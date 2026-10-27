@@ -41,6 +41,30 @@ beforeEach(() => {
 })
 
 describe('LocationsView', () => {
+  it('a place page lies over the list: the list stays rendered under it', async () => {
+    const Place = { template: '<main class="place-page">Место</main>' }
+    const stub = { template: '<div/>' }
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/locations', name: 'locations', component: LocationsView, children: [{ path: '/places/:id', name: 'place', component: Place }] },
+        { path: '/locations/:id', name: 'location', component: stub },
+        { path: '/map', component: stub },
+        { path: '/routes', component: stub },
+      ],
+    })
+    await router.push('/locations')
+    const w = mount({ template: '<RouterView />' }, { global: { plugins: [router] } })
+    await flushPromises()
+    expect(w.find('.loc__over').exists()).toBe(false)
+    await router.push('/places/zav-bay')
+    await flushPromises()
+    expect(w.find('.loc__over .place-page').exists()).toBe(true)
+    // the very list the player came from, under the page
+    expect(w.findAll('.places .place__name').map((n) => n.text())).toContain('Большой театр')
+  })
+
+
   it('back from a place page the list opens where it was left, not at the top', async () => {
     const stub = { template: '<div/>' }
     const router = createRouter({

@@ -62,11 +62,12 @@ onMounted(() => {
 })
 onBeforeUnmount(() => window.removeEventListener('resize', measure))
 
+// another place opens as a new page over the list (keyed by path in LocationsView), already at its top;
+// the window is the list's scroll and is not touched
 watch(
   () => props.id,
   () => {
     expanded.value = false
-    window.scrollTo({ top: 0 })
   },
 )
 

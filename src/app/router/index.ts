@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteRecordRaw } from 'vue-router'
 import { takeHandoffScroll } from '@/app/pageTransition'
 import { isOnboarded, markOnboarded } from '@/features/onboarding/onboardingState'
 import { useAuthStore } from '@/stores/auth'
@@ -77,12 +77,21 @@ const routes: RouteRecordRaw[] = [
       // opens like a sheet, as the clan, tasks and diary pages
       { path: 'events/new', name: 'event-create', component: () => import('@/features/events/EventCreateView.vue'), meta: { rise: true } },
       { path: 'events/:id', name: 'event', component: () => import('@/features/events/EventDetailView.vue'), props: true },
-      { path: 'locations', name: 'locations', component: () => import('@/features/locations/LocationsView.vue') },
-      { path: 'locations/:id', name: 'location', component: () => import('@/features/locations/LocationDetailView.vue'), props: true },
+      // a place page lies over the list of all locations (same URLs, absolute child paths): the list stays
+      // mounted and scrolled under it, and a swipe back reveals it (LocationsView, useSwipeBack)
+      {
+        path: 'locations',
+        name: 'locations',
+        component: () => import('@/features/locations/LocationsView.vue'),
+        children: [
+          { path: '/locations/:id', name: 'location', component: () => import('@/features/locations/LocationDetailView.vue'), props: true },
+          // Zavidovo places (migration 026)
+          { path: '/places/:id', name: 'place', component: () => import('@/features/routes/PlaceDetailView.vue'), props: true },
+        ],
+      },
       // Zavidovo: quest routes, places and artifacts (migration 026)
       { path: 'routes', name: 'routes', component: () => import('@/features/routes/RoutesView.vue') },
       { path: 'routes/random', name: 'random-route', component: () => import('@/features/routes/RandomRouteView.vue') },
-      { path: 'places/:id', name: 'place', component: () => import('@/features/routes/PlaceDetailView.vue'), props: true },
       { path: 'routes/:slug', name: 'route', component: () => import('@/features/routes/RouteDetailView.vue'), props: true },
       { path: 'collection', name: 'collection', component: () => import('@/features/collection/CollectionView.vue') },
       { path: 'album', name: 'album', component: () => import('@/features/album/AlbumView.vue') },
@@ -113,12 +122,19 @@ const routes: RouteRecordRaw[] = [
   { path: '/:pathMatch(.*)*', redirect: '/map' },
 ]
 
+/** the locations list or a place page over it */
+export const overList = (r: RouteLocationNormalized) => r.matched.some((m) => m.name === 'locations')
+
 export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
   // a new page opens at its top (it used to keep the previous page's scroll); back restores the position;
-  // a page a sheet expanded into opens at the scroll the sheet had
-  scrollBehavior: (_to, _from, saved) => saved ?? { top: takeHandoffScroll() ?? 0 },
+  // a page a sheet expanded into opens at the scroll the sheet had. Between the locations list and a place
+  // over it the window (the list's scroll) is left alone: the place page scrolls by itself
+  scrollBehavior: (to, from, saved) => {
+    if (overList(to) && overList(from)) return false
+    return saved ?? { top: takeHandoffScroll() ?? 0 }
+  },
 })
 
 router.beforeEach(async (to) => {
