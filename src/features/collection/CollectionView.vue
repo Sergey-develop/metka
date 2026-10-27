@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useSwipeBack } from '@/features/locations/swipeBack'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import StateBlock from '@/components/ui/StateBlock.vue'
 import { services } from '@/app/providers/services'
@@ -16,6 +17,8 @@ import metroArt from '@/assets/landmarks/metro.webp'
  * (migration 023) with the places the player has marked.
  */
 const router = useRouter()
+/** swipe right: back to the profile it lies over */
+const swipeBack = useSwipeBack('/profile')
 
 /** photos are cut from the mockup */
 const ART: Record<string, string> = {
@@ -44,7 +47,7 @@ onMounted(() => void load())
 </script>
 
 <template>
-  <main class="page cv">
+  <main class="page cv" v-on="swipeBack.handlers">
     <header class="cv__head">
       <button class="cv__back" aria-label="Назад" @click="router.back()"><AppIcon name="back" /></button>
       <h1>Коллекция и артефакты</h1>
@@ -85,6 +88,8 @@ onMounted(() => void load())
 $blue: #0189ff;
 
 .cv {
+  // swiped right back to the profile (useSwipeBack); vertical scrolling stays the browser's
+  touch-action: pan-y;
   padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + 24px);
   background: #fff;
 }

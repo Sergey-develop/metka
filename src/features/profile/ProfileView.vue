@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { services } from '@/app/providers/services'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import FilledIcon from '@/components/ui/FilledIcon.vue'
+import PageOverlay from '@/components/ui/PageOverlay.vue'
 import CountUp from '@/components/ui/CountUp.vue'
 import LevelProgress from '@/components/ui/LevelProgress.vue'
 import PlayerAvatar from '@/components/ui/PlayerAvatar.vue'
@@ -518,6 +519,9 @@ watch(
     <Transition name="sheet">
       <AchievementSheet v-if="openQuest" :quest="openQuest" @close="openQuestId = null" />
     </Transition>
+
+    <!-- the collection opened from here lies over the profile (child route) -->
+    <PageOverlay />
   </main>
 </template>
 

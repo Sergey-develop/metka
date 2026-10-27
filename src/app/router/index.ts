@@ -103,11 +103,16 @@ const routes: RouteRecordRaw[] = [
       { path: 'routes', name: 'routes', component: () => import('@/features/routes/RoutesView.vue') },
       { path: 'routes/random', name: 'random-route', component: () => import('@/features/routes/RandomRouteView.vue') },
       { path: 'routes/:slug', name: 'route', component: () => import('@/features/routes/RouteDetailView.vue'), props: true },
-      { path: 'collection', name: 'collection', component: () => import('@/features/collection/CollectionView.vue') },
       { path: 'album', name: 'album', component: () => import('@/features/album/AlbumView.vue') },
       // diary: the cover of the album (mockup дневник.png)
       { path: 'diary', name: 'diary', component: () => import('@/features/album/DiaryView.vue'), meta: { rise: true } },
-      { path: 'profile', name: 'profile', component: () => import('@/features/profile/ProfileView.vue') },
+      // the collection lies over the profile it is opened from (same URL): a swipe back shows the profile
+      {
+        path: 'profile',
+        name: 'profile',
+        component: () => import('@/features/profile/ProfileView.vue'),
+        children: [{ path: '/collection', name: 'collection', component: () => import('@/features/collection/CollectionView.vue') }],
+      },
       // another player's profile (clanmates only, player_public_profile)
       {
         path: 'players/:id',

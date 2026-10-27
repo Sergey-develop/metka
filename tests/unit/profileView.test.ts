@@ -99,6 +99,24 @@ beforeEach(() => {
 })
 
 describe('ProfileView', () => {
+  it('the collection lies over the profile: the profile stays rendered under it', async () => {
+    const stub = { template: '<div/>' }
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/profile', component: ProfileView, children: [{ path: '/collection', component: { template: '<main class="coll">Коллекция</main>' } }] },
+        ...['/map', '/clan', '/album', '/scan'].map((path) => ({ path, component: stub })),
+      ],
+    })
+    await router.push('/profile')
+    const w = mount({ template: '<RouterView />' }, { global: { plugins: [router] } })
+    await flushPromises()
+    await router.push('/collection')
+    await flushPromises()
+    expect(w.find('.page-over .coll').exists()).toBe(true)
+    expect(w.find('h1').text()).toBe('Михаил') // the profile, under the page
+  })
+
   it('an empty diary and collection invite to start, instead of grey tiles that look unloaded', async () => {
     const w = await mountProfile()
     const empty = w.findAll('.empty')
