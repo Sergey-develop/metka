@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import LocationsView from '@/features/locations/LocationsView.vue'
 import { swipeSession } from '@/features/locations/places'
@@ -30,6 +30,7 @@ beforeEach(() => {
   swipeSession.mode = 'gallery'
   swipeSession.range = null
   swipeSession.seen.clear()
+  swipeSession.scrollY = 0
   installFakeServices()
   const api = services().api as unknown as { getBuildingsInBbox: (...a: unknown[]) => Promise<unknown> }
   api.getBuildingsInBbox = async () => [
@@ -40,6 +41,33 @@ beforeEach(() => {
 })
 
 describe('LocationsView', () => {
+  it('back from a place page the list opens where it was left, not at the top', async () => {
+    const stub = { template: '<div/>' }
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/locations', component: LocationsView },
+        { path: '/places/:id', name: 'place', component: stub },
+        { path: '/locations/:id', name: 'location', component: stub },
+        { path: '/map', component: stub },
+        { path: '/routes', component: stub },
+      ],
+    })
+    await router.push('/locations')
+    mount({ template: '<RouterView />' }, { global: { plugins: [router] } })
+    await flushPromises()
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 640 })
+    await router.push('/places/zav-bay')
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 })
+    await router.push('/locations')
+    await flushPromises()
+    // the places loaded before show at once, so the page is long enough to scroll back right away
+    expect(scrollTo).toHaveBeenCalledWith({ top: 640 })
+    scrollTo.mockRestore()
+  })
+
+
   it('lists discovered places first; every photo is shown as is, without blur or lock', async () => {
     const { w } = await mountView()
     // the category chips of the map; the active tab of the switch is black

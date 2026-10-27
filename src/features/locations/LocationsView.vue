@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import FilledIcon from '@/components/ui/FilledIcon.vue'
 import StateBlock from '@/components/ui/StateBlock.vue'
@@ -76,9 +76,31 @@ function openPlace(b: MapBuilding): void {
   else void router.push({ name: 'location', params: { id: b.id } })
 }
 
+// back from a place page the list opens where the player left it, not at the top
+onBeforeRouteLeave(() => {
+  swipe.scrollY = window.scrollY
+})
+/** once there is enough list to scroll that far (the cached places show at once; else after loading) */
+function restoreScroll(): void {
+  const y = swipe.scrollY
+  if (y <= 0) return
+  const stop = watch(
+    () => loading.value && buildings.value.length === 0,
+    (waiting) => {
+      if (waiting) return
+      void nextTick(() => {
+        window.scrollTo({ top: y })
+        stop?.()
+      })
+    },
+    { immediate: true },
+  )
+}
+
 onMounted(() => {
   loadAll()
   void quests.load()
+  restoreScroll()
 })
 </script>
 

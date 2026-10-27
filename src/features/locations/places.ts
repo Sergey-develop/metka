@@ -21,13 +21,22 @@ export function walkTime(meters: number | null): string | null {
 
 /**
  * The swipe mode survives a trip to a place page and back (the view is recreated):
- * kept for the app session only. `range` is null until the questions are answered.
+ * kept for the app session only. `range` is null until the questions are answered;
+ * `scrollY` is where the list was scrolled when the player left it.
  */
 export const swipeSession = reactive({
   mode: 'gallery' as 'gallery' | 'swipe',
   range: null as Range | null,
   seen: new Set<string>(),
+  scrollY: 0,
 })
+
+/**
+ * The last loaded buildings, for the app session: a page that comes back (the list after a place page)
+ * shows them at once and refreshes in the background, instead of «Загружаем места…» — a short page
+ * the browser could not scroll back to where the player was.
+ */
+let lastBuildings: MapBuilding[] = []
 
 /** Game buildings of Moscow for the locations pages: loading, photo, distance and the favourite heart. */
 export function usePlaces() {
@@ -35,8 +44,8 @@ export function usePlaces() {
   const memories = useMemoriesStore()
   const collection = useCollectionStore()
 
-  const buildings = ref<MapBuilding[]>([])
-  const loading = ref(true)
+  const buildings = ref<MapBuilding[]>(lastBuildings)
+  const loading = ref(lastBuildings.length === 0)
   const error = ref<ApiError | null>(null)
 
   async function load(): Promise<void> {
@@ -46,6 +55,7 @@ export function usePlaces() {
     try {
       const rows = await services().api.getBuildingsInBbox({ minLng, minLat, maxLng, maxLat })
       buildings.value = rows
+      lastBuildings = rows
       // the map shows the card of a building picked here
       const next = new Map(map.buildings)
       for (const row of rows) next.set(row.id, row)
