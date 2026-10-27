@@ -70,7 +70,14 @@ describe('BottomNav', () => {
     w.findAll('.nav__item')[0]!.element.dispatchEvent(Object.assign(new Event('lostpointercapture', { bubbles: true }), { pointerId: 1 }))
     await at('pointermove', 450) // over «Профиль»
     expect(w.find('.nav__track--sliding').exists()).toBe(true)
-    expect(w.find('.nav__track').attributes('style')).toContain('translateX(400px)')
+    // the swollen lens (116 × 1.3 wide) stops 4px inside the glass: its centre at most 500 − 65.4
+    const lensX = () => Number(/translateX\(([-\d.]+)px\)/.exec(w.find('.nav__track').attributes('style') ?? '')![1])
+    expect(lensX()).toBeCloseTo(434.6 - 50, 1)
+    await at('pointermove', 300) // in the middle it is right under the finger
+    expect(lensX()).toBeCloseTo(250, 1)
+    await at('pointermove', -40) // past the left edge it stops at the edge
+    expect(lensX()).toBeCloseTo(65.4 - 50, 1)
+    await at('pointermove', 450)
     expect(w.findAll('.nav__item')[3]!.attributes('style')).toContain('scale(1.22)')
     await at('pointerup', 450)
     await flushPromises()

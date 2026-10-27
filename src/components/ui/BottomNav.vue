@@ -98,9 +98,20 @@ const release = (e: PointerEvent) => {
 }
 
 /** while sliding the lens sits under the finger instead of on its column */
+// the lens never leaves the bar: its centre stops where its (swollen) edge is EDGE_GAP from the glass edge.
+// Sizes as in the styles: the lens is its column + 16px wide, × 1.3 while sliding; the row is inset 14px.
+const LENS_EXTRA = 16
+const SLIDE_SCALE = 1.3
+const ROW_INSET = 14
+const EDGE_GAP = 4
 const trackStyle = computed(() => {
   if (dragX.value === null) return { '--col': lensColumn.value }
-  return { '--col': lensColumn.value, transform: `translateX(${dragX.value - columnWidth() / 2}px)`, transition: 'transform 0.06s linear' }
+  const col = columnWidth()
+  const half = ((col + LENS_EXTRA) * SLIDE_SCALE) / 2
+  const lo = half - ROW_INSET + EDGE_GAP
+  const hi = (row.value?.clientWidth ?? 0) - lo
+  const center = lo < hi ? Math.min(Math.max(dragX.value, lo), hi) : dragX.value
+  return { '--col': lensColumn.value, transform: `translateX(${center - col / 2}px)`, transition: 'transform 0.06s linear' }
 })
 /** icons near the finger grow, the closest one most (like a magnifier under the glass) */
 const itemStyle = (to: string) => {
@@ -348,7 +359,8 @@ onBeforeUnmount(() => observer?.disconnect())
 
   // sliding: a bigger, clearer lens — more glass, less frost, like a magnifier held over the bar
   .nav__track--sliding & {
-    transform: scale(1.3, 1.22);
+    // 57 × 1.12 ≈ 64 of the bar's 69px: the swollen lens stays inside it vertically too
+    transform: scale(1.3, 1.12);
     background:
       radial-gradient(120% 90% at 50% 0%, rgb(255 255 255 / 45%) 0%, rgb(255 255 255 / 0%) 55%),
       rgb(255 255 255 / 12%);
