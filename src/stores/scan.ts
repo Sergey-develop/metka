@@ -15,6 +15,7 @@ import { useAuthStore } from './auth'
 import { useMapStore } from './map'
 import { useOutlinesStore } from './outlines'
 import { useProfileStore } from './profile'
+import { useAchievementAlertsStore } from './achievementAlerts'
 import { useQuestsStore } from './quests'
 
 export type ScanPhase = 'ready' | 'locating' | 'capturing' | 'analyzing' | 'submitting' | 'done' | 'failed'
@@ -359,6 +360,8 @@ export const useScanStore = defineStore('scan', () => {
     if (verdict.status === 'accepted') {
       useProfileStore().applyStats(verdict.profile)
       useQuestsStore().invalidate()
+      // shown over whatever page the player goes to next (AchievementUnlocked)
+      if (verdict.completedQuests.length) useAchievementAlertsStore().push(verdict.completedQuests)
     }
   }
 

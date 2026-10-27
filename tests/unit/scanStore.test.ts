@@ -5,6 +5,7 @@ import { ApiError } from '@/services/api/errors'
 import { CameraError } from '@/services/camera/types'
 import { GeolocationError } from '@/services/geolocation/types'
 import { RecognitionError } from '@/services/recognition/types'
+import { useAchievementAlertsStore } from '@/stores/achievementAlerts'
 import { useAuthStore } from '@/stores/auth'
 import { useMapStore } from '@/stores/map'
 import { useProfileStore } from '@/stores/profile'
@@ -54,6 +55,14 @@ describe('scan store', () => {
     const submission = fakes.api.submitScan.mock.calls[0]![0]
     expect(submission).toMatchObject({ buildingId: BUILDING.id, modelVersion: 'test-v1', accuracyM: 10 })
     expect(submission.imageSha256).toMatch(/^[0-9a-f]{64}$/)
+    expect(useAchievementAlertsStore().queue).toEqual([])
+  })
+
+  it('an achievement completed by the scan is queued to be shown', async () => {
+    fakes.api.submitScan.mockResolvedValueOnce(decision({ completedQuests: [{ questId: 'q1', slug: 'first-mark', title: 'Первая метка' }] }))
+    const scan = startScan()
+    await scan.capture()
+    expect(useAchievementAlertsStore().current).toMatchObject({ questId: 'q1', title: 'Первая метка' })
   })
 
   it('TEST mode: without a recognition model, a listed tester scans by location + photo', async () => {

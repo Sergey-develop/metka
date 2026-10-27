@@ -2,7 +2,9 @@
 import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import SplashScreen, { SPLASH_MS } from '@/components/ui/SplashScreen.vue'
+import AchievementUnlocked from '@/features/profile/AchievementUnlocked.vue'
 import { mapCategory } from '@/features/routes/routes'
+import { useAchievementAlertsStore } from '@/stores/achievementAlerts'
 import { useAreaQuestsStore } from '@/stores/areaQuests'
 import { useAuthStore } from '@/stores/auth'
 import { useClanStore } from '@/stores/clan'
@@ -44,6 +46,7 @@ watch(
       void useExplorationStore().reset()
       useCollectionStore().reset()
       useQuestsStore().reset()
+      useAchievementAlertsStore().reset()
       useClanStore().reset()
       useEventsStore().reset()
       useTasksStore().reset()
@@ -66,6 +69,8 @@ watch(
 
 <template>
   <RouterView />
+  <!-- «Новое достижение» over any page, right after a scan completes one -->
+  <AchievementUnlocked v-if="auth.status === 'signed_in'" />
   <Transition name="splash">
     <SplashScreen v-if="auth.status === 'loading' || !minSplashDone" />
   </Transition>
