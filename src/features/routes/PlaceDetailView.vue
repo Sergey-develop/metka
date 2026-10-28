@@ -146,7 +146,7 @@ onMounted(() => void quests.load())
         </RouterLink>
       </section>
 
-      <!-- the actions stay at the bottom, over the tab bar, while the page scrolls (as on a building's page) -->
+      <!-- the actions, side by side at the end of the page -->
       <div v-if="(badges?.kind === 'food' && place.phone) || hasPoint(place)" class="pd__cta">
         <!-- a restaurant with a phone: «Забронировать» calls it -->
         <a v-if="badges?.kind === 'food' && place.phone" class="pd__primary pd__book" :href="tel(place.phone)">
@@ -374,16 +374,12 @@ $card: #f3f3f9;
   text-decoration: none;
 }
 .pd__cta {
-  position: sticky;
-  bottom: calc(var(--nav-height) + var(--safe-bottom) + 12px);
-  z-index: 5;
   display: flex;
   gap: 8px;
   margin-top: 20px;
   .pd__primary {
     flex: 1;
     margin-top: 0;
-    box-shadow: 0 6px 18px rgb(1 70 140 / 18%);
   }
 }
 .pd__book {
