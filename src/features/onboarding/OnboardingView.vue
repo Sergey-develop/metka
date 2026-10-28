@@ -5,11 +5,12 @@ import art1 from '@/assets/brand/onboarding-1.webp'
 import art2 from '@/assets/brand/onboarding-2.webp'
 import art3 from '@/assets/brand/onboarding-3.webp'
 import { markOnboarded } from './onboardingState'
+import { MOSCOW_ENABLED } from '@/utils/gameAreas'
 
 // texts and illustrations: mockups start-1..3.png (U+2011 — no line break at the hyphen)
 const slides = [
   {
-    title: 'Посмотрите на Москву по‑новому',
+    title: MOSCOW_ENABLED ? 'Посмотрите на Москву по‑новому' : 'Посмотрите на Завидово по‑новому',
     text: 'Каждая улица, парк и сквер могут стать частью вашего следующего открытия',
     art: art1,
     alt: 'Бегун с телефоном на фоне Кремля',

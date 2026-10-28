@@ -163,6 +163,7 @@ onBeforeUnmount(() => {
           <small v-if="o.distanceM !== null">≈{{ Math.round(o.distanceM / 5) * 5 }} м</small>
         </button>
       </section>
+      <p v-else-if="noBuildingsNearby && scan.outsideGame" class="ar__empty card">Здесь игры пока нет — она идёт в Завидово.</p>
       <p v-else-if="noBuildingsNearby" class="ar__empty card">
         В радиусе {{ MATCH.nearbyRadiusM }} м нет зданий из нашей базы.
       </p>

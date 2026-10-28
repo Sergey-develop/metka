@@ -10,7 +10,7 @@ import LevelProgress from '@/components/ui/LevelProgress.vue'
 import PlayerAvatar from '@/components/ui/PlayerAvatar.vue'
 import StateBlock from '@/components/ui/StateBlock.vue'
 import WalletStreak from '@/components/ui/WalletStreak.vue'
-import { gameAreaAt, type GameAreaId } from '@/utils/gameAreas'
+import { gameAreaAt, HOME_AREA, MOSCOW_ENABLED, type GameAreaId } from '@/utils/gameAreas'
 import { daysText } from '@/utils/plural'
 import { scrollToTopAfterLock } from '@/utils/scrollLock'
 import { type ApiErrorCode, toApiError } from '@/services/api/errors'
@@ -101,13 +101,14 @@ const districts = computed(() => {
 })
 
 /**
- * «Ты открыл X% …» names the game area the player is in (Moscow when the position is unknown or
- * outside every area). Another player's profile stays on Moscow: only their okrug counts are public.
+ * «Ты открыл X% …» names the game area the player is in (HOME_AREA — Moscow, or Zavidovo with Moscow off —
+ * when the position is unknown or outside every area). Another player's profile stays on Moscow: only
+ * their okrug counts are public.
  */
 const lastFix = ref<{ lat: number; lng: number } | null>(null)
 const area = computed<GameAreaId>(() => {
   const at = map.position ?? lastFix.value
-  return (!isOther.value && at && gameAreaAt(at)) || 'moscow'
+  return (!isOther.value && at && gameAreaAt(at)) || HOME_AREA
 })
 const areaProgress = ref<{ total: number; discovered: number } | null>(null)
 
@@ -118,7 +119,7 @@ async function locate(): Promise<void> {
     if ((await geo.checkPermission()) !== 'granted') return
     lastFix.value = await geo.getCurrentPosition({ maxAgeMs: 5 * 60_000 })
   } catch {
-    // stays on Moscow
+    // stays on the home area
   }
 }
 
@@ -176,7 +177,10 @@ const sportIndex = computed(() => (monthActiveDays.value === null ? null : Math.
 const p = computed(() => (isOther.value ? (other.value?.profile ?? null) : store.profile))
 
 const home = computed(() => districts.value.find((d) => d.id === p.value?.homeDistrictId) ?? null)
-const title = computed(() => (home.value ? `Знаток ${home.value.shortName}` : 'Исследователь Москвы'))
+const title = computed(() => {
+  if (!MOSCOW_ENABLED) return 'Исследователь Завидово'
+  return home.value ? `Знаток ${home.value.shortName}` : 'Исследователь Москвы'
+})
 
 /** home district if the player has one, otherwise the whole city */
 const places = computed(() => {
@@ -364,9 +368,17 @@ watch(
         </button>
       </div>
 
-      <MoscowMapCard :districts="districts" :lead="isOther ? p.username : undefined" :area="area" :area-progress="areaProgress" />
+      <!-- another player's share is public only for Moscow; with Moscow off their card would show mine -->
+      <MoscowMapCard
+        v-if="MOSCOW_ENABLED || !isOther"
+        :districts="districts"
+        :lead="isOther ? p.username : undefined"
+        :area="area"
+        :area-progress="areaProgress"
+      />
 
-      <section class="block">
+      <!-- okrugs, Moscow streets: only with Moscow in the game -->
+      <section v-if="MOSCOW_ENABLED" class="block">
         <div class="block__head">
           <h2>Локации района</h2>
           <RouterLink to="/map" class="more" aria-label="Открыть карту"><AppIcon name="chevron" :size="18" /></RouterLink>

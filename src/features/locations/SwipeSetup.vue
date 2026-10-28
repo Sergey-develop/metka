@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import FilledIcon from '@/components/ui/FilledIcon.vue'
+import { MOSCOW_ENABLED } from '@/utils/gameAreas'
 
 export type Company = 'solo' | 'pair' | 'kids' | 'group'
 export type Range = 'near' | 'district' | 'city'
@@ -16,7 +17,7 @@ const COMPANY: { id: Company; label: string }[] = [
 const RANGE: { id: Range; label: string; hint: string }[] = [
   { id: 'near', label: 'Рядом', hint: 'До 1 км' },
   { id: 'district', label: 'Мой район', hint: 'До 5 км' },
-  { id: 'city', label: 'По всей Москве', hint: 'Без ограничений' },
+  { id: 'city', label: MOSCOW_ENABLED ? 'По всей Москве' : 'По всему курорту', hint: 'Без ограничений' },
 ]
 
 const company = ref<Company | null>(null)

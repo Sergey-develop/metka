@@ -31,6 +31,8 @@ jobs:
           VITE_YANDEX_MAPS_API_KEY: ${{ vars.VITE_YANDEX_MAPS_API_KEY }}
           VITE_RECOGNITION_MODEL_URL: ${{ vars.VITE_RECOGNITION_MODEL_URL }}
           VITE_AUTH_OAUTH_PROVIDERS: ${{ vars.VITE_AUTH_OAUTH_PROVIDERS }}
+          # 'true' puts Moscow back in the game (unset: Zavidovo only)
+          VITE_MOSCOW: ${{ vars.VITE_MOSCOW }}
 
       - run: npx cap sync ios
         env:

@@ -1,6 +1,7 @@
 import type { FilledIconName } from '@/components/ui/icons'
 import type { ClanPage } from '@/types/game'
 import { plural } from '@/utils/plural'
+import { MOSCOW_ENABLED } from '@/utils/gameAreas'
 
 type Member = ClanPage['members'][number]
 type Entry = ClanPage['chronicle'][number]
@@ -23,11 +24,11 @@ const fmt = (n: number) => n.toLocaleString('ru-RU')
  */
 export const CLAN_HERO = { bodyTop: 170, height: 194, rowY: 66 } as const
 
-/** «Открыть 800 клеток в ЦАО» / «… Москвы» when the leader has no home district */
+/** «Открыть 800 клеток в ЦАО» / «… Москвы» (or «… Завидово» with Moscow off) when the leader has no home district */
 export function goalTitle(page: ClanPage): string {
   const g = page.week.goal
   const cells = `${fmt(g.target)} ${plural(g.target, ['клетку', 'клетки', 'клеток'])}`
-  return g.districtName ? `Открыть ${cells} в ${g.districtName}` : `Открыть ${cells} Москвы`
+  return g.districtName && MOSCOW_ENABLED ? `Открыть ${cells} в ${g.districtName}` : `Открыть ${cells} ${MOSCOW_ENABLED ? 'Москвы' : 'в Завидово'}`
 }
 
 export const daysLeftText = (page: ClanPage) => `${page.week.daysLeft} ${plural(page.week.daysLeft, ['день', 'дня', 'дней'])} до конца`

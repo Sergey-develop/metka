@@ -5,6 +5,7 @@ import type { Cell } from '@/services/exploration/grid'
 import type { GeoFix } from '@/services/geolocation/types'
 import type { LngLatPair, MapScene, MapService, MapTarget, MapViewport } from '@/services/map/types'
 import type { BuildingOutline, DistrictOverview, MapBuilding } from '@/types/game'
+import { MOSCOW_ENABLED, ZAVIDOVO_HOME } from '@/utils/gameAreas'
 import { bounds, MOSCOW_BOUNDS } from '@/utils/mapGeometry'
 
 const props = defineProps<{
@@ -73,8 +74,10 @@ function onSelect(target: MapTarget): void {
   else emit('selectDistrict', target.id !== props.selectedDistrictId ? target.id : null)
 }
 
+/** the whole game: Moscow's okrugs, or the Zavidovo bay at street level when Moscow is off */
 function showCity(animate = true): void {
-  map?.fitBounds(MOSCOW_BOUNDS, 19, animate)
+  if (MOSCOW_ENABLED) map?.fitBounds(MOSCOW_BOUNDS, 19, animate)
+  else map?.flyTo([ZAVIDOVO_HOME.lng, ZAVIDOVO_HOME.lat], ZAVIDOVO_HOME.zoom)
 }
 
 async function mount(): Promise<void> {
@@ -86,7 +89,8 @@ async function mount(): Promise<void> {
   instance.onViewport((v) => emit('viewport', v))
   instance.onSelect(onSelect)
   try {
-    await instance.mount(container.value, { center: [37.615, 55.74], zoom: 10, margin: margin() })
+    const start = MOSCOW_ENABLED ? { center: [37.615, 55.74] as LngLatPair, zoom: 10 } : { center: [ZAVIDOVO_HOME.lng, ZAVIDOVO_HOME.lat] as LngLatPair, zoom: ZAVIDOVO_HOME.zoom }
+    await instance.mount(container.value, { ...start, margin: margin() })
     if (map !== instance) return
     instance.render(scene())
     instance.setHeading(props.heading ?? null)

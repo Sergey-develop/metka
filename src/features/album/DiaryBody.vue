@@ -13,6 +13,7 @@ import { useMemoriesStore } from '@/stores/memories'
 import type { CollectionItem, Memory } from '@/types/game'
 import { plural } from '@/utils/plural'
 import MemoryEditor from './MemoryEditor.vue'
+import { MOSCOW_ENABLED } from '@/utils/gameAreas'
 
 /**
  * The diary below its header (mockup дневник.png) — shared by the diary page and the diary sheet
@@ -94,7 +95,7 @@ onMounted(() => {
       <AppButton block class="new" @click="picking = true">Новая запись</AppButton>
 
       <section class="city">
-        <span class="city__chip"><FilledIcon name="pin" :size="16" />Москва</span>
+        <span class="city__chip"><FilledIcon name="pin" :size="16" />{{ MOSCOW_ENABLED ? 'Москва' : 'Завидово' }}</span>
         <img class="city__art" :src="cityArt" alt="" />
         <p class="city__lead">Фото и заметки</p>
         <h2 class="city__title">Дневник<br />города</h2>

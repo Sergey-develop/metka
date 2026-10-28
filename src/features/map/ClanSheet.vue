@@ -14,6 +14,7 @@ import { CLAN_HERO, clanMetrics, daysLeftText, goalTitle, weeklyRanking } from '
 import { useAuthStore } from '@/stores/auth'
 import { useClanStore } from '@/stores/clan'
 import { plural } from '@/utils/plural'
+import { MOSCOW_ENABLED } from '@/utils/gameAreas'
 
 /**
  * The clan over the map. Half open it is the mockup «выдвигается клан»: crest, name, the goal of the
@@ -60,7 +61,7 @@ onMounted(() => void clan.load({ page: true }))
       <StateBlock v-else-if="clan.loadError && !page" kind="error" title="Не удалось загрузить клан" action-label="Повторить" @action="clan.load({ page: true })" />
       <section v-else-if="!clan.membership" class="none">
         <h2>Ты пока не в клане</h2>
-        <p>Вступи в клан или создай свой — исследуйте Москву вместе.</p>
+        <p>Вступи в клан или создай свой — исследуйте {{ MOSCOW_ENABLED ? 'Москву' : 'Завидово' }} вместе.</p>
         <RouterLink v-slot="{ navigate }" to="/clan" custom>
           <AppButton block @click="emit('close'), navigate()">Найти клан</AppButton>
         </RouterLink>

@@ -6,6 +6,7 @@ import { useMapStore } from '@/stores/map'
 import { useMemoriesStore } from '@/stores/memories'
 import type { MapBuilding } from '@/types/game'
 import { distanceMeters } from '@/utils/geo'
+import { MOSCOW_ENABLED } from '@/utils/gameAreas'
 import { MOSCOW_BOUNDS } from '@/utils/mapGeometry'
 import type { Range } from './SwipeSetup.vue'
 
@@ -45,10 +46,16 @@ export function usePlaces() {
   const collection = useCollectionStore()
 
   const buildings = ref<MapBuilding[]>(lastBuildings)
-  const loading = ref(lastBuildings.length === 0)
+  const loading = ref(MOSCOW_ENABLED && lastBuildings.length === 0)
   const error = ref<ApiError | null>(null)
 
   async function load(): Promise<void> {
+    // this list is the game buildings of Moscow (MOSCOW_BOUNDS): with Moscow off it is empty; Zavidovo shows its places
+    if (!MOSCOW_ENABLED) {
+      buildings.value = []
+      loading.value = false
+      return
+    }
     loading.value = true
     error.value = null
     const [[minLng, minLat], [maxLng, maxLat]] = MOSCOW_BOUNDS

@@ -16,6 +16,7 @@ import EventDateSheet from './EventDateSheet.vue'
 import EventPlacePicker from './EventPlacePicker.vue'
 import EventTimeSheet from './EventTimeSheet.vue'
 import { type DayValue, KIND_INFO, moscowDay, moscowInstant } from './eventKinds'
+import { MOSCOW_ENABLED, ZAVIDOVO_HOME } from '@/utils/gameAreas'
 
 /**
  * «Создать событие», 4 steps (mockups 123/ивенты): -6 type → -5 meeting point → -1 date, time, limit
@@ -38,10 +39,11 @@ watch(step, (to, from) => {
 // step 1
 const kind = ref<EventKind | null>(null)
 
-// step 2: Moscow centre until the player's position is known (never asks for permission here)
-const MOSCOW_CENTER: LngLatPair = [37.6176, 55.7558]
-const startCenter = ref<LngLatPair>(MOSCOW_CENTER)
-const center = ref<LngLatPair>(MOSCOW_CENTER)
+// step 2: Moscow centre (the Zavidovo bay with Moscow off) until the player's position is known
+// (never asks for permission here)
+const START: LngLatPair = MOSCOW_ENABLED ? [37.6176, 55.7558] : [ZAVIDOVO_HOME.lng, ZAVIDOVO_HOME.lat]
+const startCenter = ref<LngLatPair>(START)
+const center = ref<LngLatPair>(START)
 
 // step 3: defaults — tomorrow at the next full hour, 10 people
 const now = new Date()
@@ -126,7 +128,7 @@ function removeCover(): void {
 
 const ERRORS: Partial<Record<ApiErrorCode, string>> = {
   invalid_event: 'Проверьте данные события: время — не раньше чем через 15 минут.',
-  invalid_location: 'Место встречи должно быть в Москве.',
+  invalid_location: MOSCOW_ENABLED ? 'Место встречи должно быть в Москве или Завидово.' : 'Место встречи должно быть в Завидово.',
   invalid_photo: 'Не удалось загрузить обложку. Попробуйте другую.',
   too_many_events: 'У вас уже 5 предстоящих событий — это максимум.',
   offline: 'Нет подключения к сети.',

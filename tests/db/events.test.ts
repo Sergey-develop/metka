@@ -96,8 +96,14 @@ describe('create_event', () => {
     await expect(create(u, { max: 101 })).rejects.toThrow(/invalid_event/)
     await expect(create(u, { startsAt: inHours(0.1) })).rejects.toThrow(/invalid_event/) // 6 minutes ahead
     await expect(create(u, { startsAt: inHours(24 * 91) })).rejects.toThrow(/invalid_event/)
-    // outside every okrug
+    // outside every game area (Saint Petersburg)
     await expect(create(u, { lat: 59.93, lng: 30.31 })).rejects.toThrow(/invalid_location/)
+  })
+
+  it('an event can be made in Zavidovo too (migration 035), not only in a Moscow okrug', async () => {
+    const u = await player()
+    const id = await create(u, { lat: 56.5937, lng: 36.5187 }) // the main bay
+    expect(id).toMatch(/^[0-9a-f-]{36}$/)
   })
 
   it('accepts only the creator’s own uploaded cover', async () => {

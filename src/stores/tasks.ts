@@ -5,6 +5,7 @@ import { type ApiError, toApiError } from '@/services/api/errors'
 import type { TasksState } from '@/types/game'
 import { useProfileStore } from './profile'
 import { useQuestsStore } from './quests'
+import { MOSCOW_ENABLED } from '@/utils/gameAreas'
 
 /** Tasks of the day / week and the seasonal task (my_tasks, migration 020) for the map's tasks sheet. */
 export const useTasksStore = defineStore('tasks', () => {
@@ -13,8 +14,10 @@ export const useTasksStore = defineStore('tasks', () => {
   const error = ref<ApiError | null>(null)
   const claiming = ref<Set<string>>(new Set())
 
-  const day = computed(() => state.value?.tasks.filter((t) => t.period === 'day') ?? [])
-  const week = computed(() => state.value?.tasks.filter((t) => t.period === 'week') ?? [])
+  // «Исследуй 3 разных округа» are Moscow's okrugs: not shown with Moscow off (it could not be done)
+  const shown = computed(() => (state.value?.tasks ?? []).filter((t) => MOSCOW_ENABLED || t.kind !== 'districts'))
+  const day = computed(() => shown.value.filter((t) => t.period === 'day'))
+  const week = computed(() => shown.value.filter((t) => t.period === 'week'))
   /** rewards waiting to be claimed — the badge on the map button */
   const ready = computed(() => {
     const s = state.value

@@ -33,7 +33,7 @@ import RouteCard from './RouteCard.vue'
 import TasksSheet from './TasksSheet.vue'
 import PageOverlay from '@/components/ui/PageOverlay.vue'
 import MemoryEditor from '@/features/album/MemoryEditor.vue'
-import { gameAreaAt, ZAVIDOVO_HOME, type GameAreaId } from '@/utils/gameAreas'
+import { gameAreaAt, MOSCOW_ENABLED, ZAVIDOVO_HOME, type GameAreaId } from '@/utils/gameAreas'
 import { usePlaces } from '@/features/locations/places'
 import { useMapHeading } from '@/features/map/heading'
 import { useSwipeAway } from '@/features/map/swipeAway'
@@ -148,7 +148,8 @@ const fogHint = computed(() => {
 /** the other game area to jump to: Zavidovo is ~100 km away and empty from afar (no okrugs, no basemap) */
 const otherArea = computed(() => {
   const v = viewport.value
-  if (!v) return null
+  // one game area only (Moscow off): nowhere else to jump
+  if (!v || !MOSCOW_ENABLED) return null
   const here = gameAreaAt({ lng: (v.bbox.minLng + v.bbox.maxLng) / 2, lat: (v.bbox.minLat + v.bbox.maxLat) / 2 })
   return here === 'zavidovo' ? { id: 'moscow' as const, label: 'Москва' } : { id: 'zavidovo' as const, label: 'Завидово' }
 })
@@ -340,6 +341,8 @@ function centerOnPlayerOnce(): void {
   if (centeredOnPlayer || !mapReady.value || !at) return
   centeredOnPlayer = true
   if (route.active || map.selectedBuildingId || mapCategory.value) return
+  // outside the game (Moscow off and the player in Moscow): the map stays over the Zavidovo bay
+  if (!gameAreaAt(at)) return
   canvas.value?.flyTo(at.lng, at.lat, at.accuracyM > 300 ? 14 : 16)
 }
 watch(() => map.position, centerOnPlayerOnce)
@@ -404,7 +407,7 @@ onBeforeUnmount(() => {
     <MapCanvas
       ref="canvas"
       :buildings="canvasBuildings"
-      :districts="map.districts"
+      :districts="MOSCOW_ENABLED ? map.districts : []"
       :outlines="outlines.list"
       :buildings-with-outline="outlines.gameIdsWithOutline"
       :position="map.position"

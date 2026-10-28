@@ -14,6 +14,9 @@ export default defineConfig({
           name: 'unit',
           environment: 'happy-dom',
           include: ['tests/unit/**/*.test.ts'],
+          // most tests were written with Moscow in the game; Zavidovo alone (the default, VITE_MOSCOW unset)
+          // is covered by moscowOff.test.ts
+          env: { VITE_MOSCOW: 'true' },
         },
       },
       {

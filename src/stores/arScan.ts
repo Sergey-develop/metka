@@ -11,6 +11,7 @@ import { SelectionStabilizer, type Selection } from '@/services/scan/stabilizer'
 import type { BuildingOutline } from '@/types/game'
 import { distanceMeters } from '@/utils/geo'
 import { useBuildingInfoStore } from './buildingInfo'
+import { gameAreaAt } from '@/utils/gameAreas'
 
 export type ArScanPhase = 'idle' | 'starting' | 'running' | 'failed'
 export type ArScanFailure = 'camera_denied' | 'camera_unavailable' | 'camera_failed' | 'location_denied' | 'gps_disabled'
@@ -99,8 +100,19 @@ export const useArScanStore = defineStore('arScan', () => {
     setSelection(stabilizer.update(match.value, now))
   }
 
+  /** the player stands outside every game area (e.g. in Moscow with Moscow off): no buildings to scan */
+  const outsideGame = computed(() => !!position.value && !gameAreaAt(position.value))
+
   async function fetchOutlines(fix: GeoFix): Promise<void> {
     fetchController?.abort()
+    if (!gameAreaAt(fix)) {
+      fetchController = null
+      fetchedAt = fix
+      outlines.value = []
+      outlinesState.value = 'ready'
+      recompute(true)
+      return
+    }
     const controller = new AbortController()
     fetchController = controller
     fetchedAt = fix
@@ -275,6 +287,7 @@ export const useArScanStore = defineStore('arScan', () => {
     outlines,
     outlinesState,
     outlinesError,
+    outsideGame,
     match,
     selection,
     selectedOutline,

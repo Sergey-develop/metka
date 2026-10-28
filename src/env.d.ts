@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_RECOGNITION_MODEL_URL?: string
   readonly VITE_AUTH_OAUTH_PROVIDERS?: string
   readonly VITE_USE_MOCKS?: string
+  /** 'true' puts Moscow back in the game (2026-10-28: Zavidovo only) */
+  readonly VITE_MOSCOW?: string
 }
 
 interface ImportMeta {

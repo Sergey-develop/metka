@@ -14,7 +14,7 @@ import type {
 } from '@yandex/ymaps3-types'
 import type { BuildingOutline, DistrictOverview, MapBuilding, Rarity } from '@/types/game'
 import { type FogArea, fogGeometry } from '@/services/exploration/fog'
-import { GAME_AREAS as GAME_AREA_LIST } from '@/utils/gameAreas'
+import { GAME_AREAS as GAME_AREA_LIST, MOSCOW_ENABLED } from '@/utils/gameAreas'
 import { cellKey, cellOf, cellsToMultiPolygon, type Cell } from '@/services/exploration/grid'
 import { containsPoint, labelPoint, toLngLat } from '@/utils/mapGeometry'
 import type { YmapsApi } from './yandexLoader'
@@ -55,21 +55,27 @@ const DISTRICT_LABEL_MAX_ZOOM = 12.5
 const BASEMAP_MIN_ZOOM = STREET_LEVEL_ZOOM
 const DISTRICT_NEAR_ZOOM = BASEMAP_MIN_ZOOM
 /**
- * The game areas [minLng, minLat, maxLng, maxLat]: Moscow incl. New Moscow, and the Zavidovo resort
- * (Tver region). Mirrors in_game_area() on the server (migration 022), which only counts exploration
- * inside them; the fog covers exactly these rectangles.
+ * The game areas in play [minLng, minLat, maxLng, maxLat]: the Zavidovo resort (Tver region) and, with
+ * VITE_MOSCOW=true, Moscow incl. New Moscow (utils/gameAreas). Mirrors in_game_area() on the server
+ * (migration 022), which only counts exploration inside them; the fog covers exactly these rectangles.
  */
 const GAME_AREAS: readonly FogArea[] = GAME_AREA_LIST.map((area) => area.bbox)
 /**
  * Panning stays within the box around all game areas. Unlike `map.bounds` (top-left, bottom-right),
  * restrictMapArea expects [south-west, north-east] — verified in Chrome against JS API 3.0.
- * The area must stay larger than the viewport at the minimum zoom, or Yandex misplaces the centre.
+ * The area must stay larger than the viewport at the minimum zoom, or Yandex misplaces the centre:
+ * Zavidovo alone (Moscow off) is 0.1°, so ±0.15° around it and no zoom below 11.5 (a phone shows ≈0.2°).
  */
-const MAP_AREA: LngLatBounds = [
-  [36.45, 55.1],
-  [38.4, 56.65],
-]
-const MIN_ZOOM = 9.5
+const MAP_AREA: LngLatBounds = MOSCOW_ENABLED
+  ? [
+      [36.45, 55.1],
+      [38.4, 56.65],
+    ]
+  : [
+      [36.33, 56.37],
+      [36.73, 56.77],
+    ]
+const MIN_ZOOM = MOSCOW_ENABLED ? 9.5 : 11.5
 /**
  * Explored cells live in their own layer above the basemap and below our features layer (1500),
  * so district fog, footprints and DOM markers stay on top. Yandex draws basemap labels and icons
