@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import LocationsView from '@/features/locations/LocationsView.vue'
 import { swipeSession } from '@/features/locations/places'
 import { services } from '@/app/providers/services'
+import { useAreaQuestsStore } from '@/stores/areaQuests'
 import { useMapStore } from '@/stores/map'
 import type { AreaPlace, AreaQuests } from '@/types/game'
 import { BUILDING, installFakeServices } from './helpers'
@@ -239,5 +240,42 @@ describe('LocationsView', () => {
     await w.find('.sw__next').trigger('click')
     expect(w.find('.card:not(.card--under) h2').text()).toBe('zav-bay')
     expect(w.find('.card:not(.card--under) .card__tag--own').text()).toBe('Природа / вода')
+  })
+
+  it('every Zavidovo place has the heart, before any visit: saved to place_favorites, back when refused', async () => {
+    const place: AreaPlace = {
+      id: 'zav-tsarevna', zone: 'resort', category: 'Еда', name: 'Царевна', description: 'Описание', idea: null, address: null,
+      lat: 56.5937, lng: 36.5187, radiusM: 60, isPartner: false, needsCheck: false, tags: ['food'], openingHours: null, phone: null,
+      website: null, rewardXp: 10, rewardCoins: 0,
+    }
+    const api = services().api as unknown as Record<string, unknown>
+    api.getAreaQuests = async (): Promise<AreaQuests> => ({ routes: [], places: [place], visits: [], collections: [] })
+    api.getPlaceFavorites = vi.fn(async () => [])
+    const setPlaceFavorite = vi.fn(async () => undefined)
+    api.setPlaceFavorite = setPlaceFavorite
+    useMapStore().position = { lat: 56.5937, lng: 36.5187, accuracyM: 5, timestamp: 0 }
+    const { w } = await mountView()
+    // the store may still hold the previous test's places: load this test's
+    await useAreaQuestsStore().load(true)
+    await flushPromises()
+    const card = () => w.findAll('.place').find((p) => p.find('.place__name').text() === 'Царевна')!
+    const heart = () => card().find('.place__fav')
+    expect(heart().exists()).toBe(true)
+    expect(heart().classes()).not.toContain('on')
+
+    await heart().trigger('click')
+    await flushPromises()
+    expect(setPlaceFavorite).toHaveBeenCalledWith('zav-tsarevna', true)
+    expect(heart().classes()).toContain('on')
+
+    setPlaceFavorite.mockRejectedValueOnce(new Error('offline'))
+    await heart().trigger('click')
+    await flushPromises()
+    expect(setPlaceFavorite).toHaveBeenLastCalledWith('zav-tsarevna', false)
+    expect(heart().classes()).toContain('on') // refused: the heart stays
+
+    // a Moscow building still needs a discovery
+    const locked = w.findAll('.place').find((p) => p.find('.place__name').text() === 'Большой театр')!
+    expect(locked.find('.place__fav').exists()).toBe(false)
   })
 })

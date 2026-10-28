@@ -509,6 +509,18 @@ export class GameApi implements CandidateMatcher {
     })
   }
 
+  /** ids of the area places the player hearted (place_favorites, migration 041) */
+  async getPlaceFavorites(): Promise<string[]> {
+    const data = await withRetry(() => unwrap(this.client.from('place_favorites').select('place_id')))
+    return arr(data).map((row) => str(obj(row, 'place_favorite'), 'place_id'))
+  }
+
+  /** hearts (or un-hearts) an area place; repeating either is harmless */
+  async setPlaceFavorite(placeId: string, on: boolean): Promise<void> {
+    const table = this.client.from('place_favorites')
+    await unwrap(on ? table.upsert({ place_id: placeId }, { onConflict: 'user_id,place_id', ignoreDuplicates: true }) : table.delete().eq('place_id', placeId))
+  }
+
   /** area_progress() (migration 025): game buildings of a game area and how many the player found */
   async getAreaProgress(area: GameAreaId): Promise<{ total: number; discovered: number }> {
     const o = obj(await withRetry(() => unwrap(this.client.rpc('area_progress', { p_area: area }))), 'area_progress')

@@ -7,6 +7,8 @@ const props = defineProps<{
   places: MapBuilding[]
   photo: (b: MapBuilding) => string | null
   isFavorite: (b: MapBuilding) => boolean
+  /** discovered buildings and area places; without it — discovered buildings only */
+  canFavorite?: (b: MapBuilding) => boolean
   favBusy: string | null
   /** a tag of its own instead of the rarity (Zavidovo places show their category) */
   tagOf?: (b: MapBuilding) => string | null
@@ -117,7 +119,7 @@ function swipe(dir: -1 | 1): void {
       <span v-if="tagOf?.(current)" class="card__tag card__tag--own">{{ tagOf(current) }}</span>
       <span v-else class="card__tag" :class="`r-${current.rarity}`">{{ RARITY[current.rarity] }}</span>
       <button
-        v-if="current.discoveredAt"
+        v-if="canFavorite ? canFavorite(current) : current.discoveredAt"
         class="card__fav"
         :class="{ on: isFavorite(current) }"
         :aria-pressed="isFavorite(current)"

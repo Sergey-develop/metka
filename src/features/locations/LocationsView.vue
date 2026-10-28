@@ -16,7 +16,7 @@ import SwipeDeck from './SwipeDeck.vue'
 import SwipeSetup, { type Range } from './SwipeSetup.vue'
 
 const router = useRouter()
-const { buildings, loading, error, load, loadAll, distance, photo: buildingPhoto, isFavorite, favBusy, toggleFavorite } = usePlaces()
+const { buildings, loading, error, load, loadAll, distance, photo: buildingPhoto, isFavorite, canFavorite, favBusy, toggleFavorite } = usePlaces()
 
 // Zavidovo places (area_places) shown as location cards: `place:<id>`, photo and description of the place
 const quests = useAreaQuestsStore()
@@ -153,6 +153,7 @@ onMounted(() => {
             :photo="photo"
             :tag-of="tagOf"
             :is-favorite="isFavorite"
+            :can-favorite="canFavorite"
             :fav-busy="favBusy"
             @open="openPlace"
             @favorite="toggleFavorite"
@@ -206,7 +207,7 @@ onMounted(() => {
                   </div>
                 </div>
                 <button
-                  v-if="b.discoveredAt"
+                  v-if="canFavorite(b)"
                   class="place__fav"
                   :class="{ on: isFavorite(b) }"
                   :aria-pressed="isFavorite(b)"
