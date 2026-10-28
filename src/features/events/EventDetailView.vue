@@ -11,6 +11,7 @@ import { plural } from '@/utils/plural'
 import { type ApiError, type ApiErrorCode, toApiError } from '@/services/api/errors'
 import { useAuthStore } from '@/stores/auth'
 import { useEventsStore } from '@/stores/events'
+import { useRouteStore } from '@/stores/route'
 import type { GameEvent } from '@/types/game'
 import { KIND_INFO, shortDate, weekdayClock } from './eventKinds'
 
@@ -46,7 +47,32 @@ const started = computed(() => !!startsAt.value && startsAt.value.getTime() <= D
 const isOrganizer = computed(() => !!event.value && event.value.organizer.userId === auth.userId)
 const full = computed(() => !!event.value && event.value.participants >= event.value.maxParticipants)
 const others = computed(() => (event.value ? Math.max(0, event.value.participants - event.value.faces.length) : 0))
-const mapLink = computed(() => (event.value ? `https://yandex.ru/maps/?pt=${event.value.lng},${event.value.lat}&z=17&l=map` : ''))
+/** the meeting point on our map, with the walking route to it; the route card leads back to the event */
+const walk = useRouteStore()
+function showOnMap(): void {
+  const e = event.value
+  if (!e) return
+  walk.start(
+    {
+      id: `event:${e.id}`,
+      slug: `event-${e.id}`,
+      name: e.title,
+      description: null,
+      address: e.placeName,
+      districtId: null,
+      lat: e.lat,
+      lng: e.lng,
+      scanRadiusM: 60,
+      rarity: 'common',
+      reward: { xp: 0, coins: 0, influence: 0 },
+      imageUrl: null,
+      isDevSeed: false,
+      discoveredAt: null,
+    },
+    `/events/${e.id}`,
+  )
+  void router.push('/map')
+}
 
 const ERRORS: Partial<Record<ApiErrorCode, string>> = {
   event_full: 'Мест больше нет.',
@@ -105,13 +131,13 @@ onMounted(load)
               <small>{{ weekdayClock(startsAt!) }}</small>
             </span>
           </div>
-          <a class="fact" :href="mapLink" target="_blank" rel="noopener">
+          <button type="button" class="fact" @click="showOnMap">
             <FilledIcon name="pin" :size="20" class="fact__icon" />
             <span class="fact__text">
               <b>{{ event.placeName ?? 'Точка на карте' }}</b>
             </span>
             <AppIcon name="chevron" :size="18" class="fact__chev" />
-          </a>
+          </button>
           <div class="fact fact--wide">
             <FilledIcon name="profile" :size="20" class="fact__icon" />
             <span class="fact__text">
@@ -238,6 +264,11 @@ $card: #f2f2f7;
   background: $card;
   color: inherit;
   text-decoration: none;
+  width: 100%;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .fact--wide {
   grid-column: 1 / -1;
