@@ -358,7 +358,8 @@ function centerOnPlayerOnce(): void {
   if (route.active || map.selectedBuildingId || mapCategory.value) return
   // outside the game (Moscow off and the player in Moscow): the map stays over the Zavidovo bay
   if (!gameAreaAt(at)) return
-  canvas.value?.flyTo(at.lng, at.lat, at.accuracyM > 300 ? 14 : 16)
+  // close enough to see the houses around the player (owner, 2026-10-28)
+  canvas.value?.flyTo(at.lng, at.lat, at.accuracyM > 300 ? 15 : 18)
 }
 watch(() => map.position, centerOnPlayerOnce)
 
