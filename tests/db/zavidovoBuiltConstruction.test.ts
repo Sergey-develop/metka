@@ -40,7 +40,8 @@ describe('zavidovo built construction', () => {
     expect(rows.rows).toEqual([
       { osm_id: '14440980', category: null, building: 'yes', name: 'Завидово Аква & SPA', status: 'published' },
       { osm_id: '976900759', category: 'construction', building: 'construction', name: null, status: null },
-      { osm_id: '1084410864', category: null, building: 'yes', name: 'улица Тверской бульвар, 6', status: 'published' },
+      // published by 031 under its address, named by 038 after the owner's Yandex screenshot
+      { osm_id: '1084410864', category: null, building: 'yes', name: 'Бревис Модерн', status: 'published' },
     ])
   })
 })
