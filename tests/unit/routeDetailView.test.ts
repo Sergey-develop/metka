@@ -241,6 +241,10 @@ describe('PlaceDetailView', () => {
 
     const bay = await mountAt('/places/zav-bay', PlaceDetailView, { id: 'zav-bay' })
     expect(bay.w.find('.pd__route').text()).toContain('Завидово: поймай волну')
+    // the card starts the quest (the demo: a mark → its card → its quest)
+    expect(bay.w.find('.pd__route-text b').text()).toBe('Секреты большой воды')
+    expect(bay.w.find('.pd__route-go').text()).toBe('Начать квест')
+    expect(bay.w.find('.pd__route').attributes('href')).toBe('/routes/zav-catch-wave')
     // not a restaurant: no booking
     expect(bay.w.find('.pd__book').exists()).toBe(false)
     expect(bay.w.find('.pd__cover').attributes('src')).toContain('zav-bay')

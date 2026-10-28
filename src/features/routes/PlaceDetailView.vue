@@ -13,7 +13,7 @@ import { useRouteStore } from '@/stores/route'
 import { distanceMeters, formatDistance } from '@/utils/geo'
 import { message, rewardLines } from './outcome'
 import { photoCredit, placePhoto } from './photos'
-import { hasPoint, placeBadges, placeTarget } from './routes'
+import { doneCount, hasPoint, placeBadges, placeTarget } from './routes'
 import { useSwipeBack } from '@/features/locations/swipeBack'
 
 /** A place of Zavidovo (area_places): photo, what it is, contacts, the way there and the routes through it. */
@@ -139,10 +139,17 @@ onMounted(() => void quests.load())
         </p>
       </section>
 
+      <!-- the quests through this place: the card starts one (the demo's «запускаем квест») -->
       <section v-if="routes.length" class="pd__routes">
-        <h3>Есть в маршрутах</h3>
+        <h3>{{ routes.length > 1 ? 'Квесты здесь' : 'Квест здесь' }}</h3>
         <RouterLink v-for="r in routes" :key="r.id" :to="{ name: stackedName(here, 'route'), params: { slug: r.slug } }" class="pd__route">
-          {{ r.title }}<AppIcon name="chevron" :size="18" />
+          <span class="pd__route-text">
+            <b>{{ r.questTitle }}</b>
+            <small>{{ r.title }} · {{ doneCount(r) }}/{{ r.steps.length }}</small>
+          </span>
+          <span class="pd__route-go" :class="{ 'pd__route-go--done': r.completedAt }">
+            {{ r.completedAt ? 'Пройден' : doneCount(r) > 0 ? 'Продолжить' : 'Начать квест' }}
+          </span>
         </RouterLink>
       </section>
 
@@ -361,7 +368,33 @@ $card: #f3f3f9;
     font-weight: 600;
   }
 }
+.pd__route-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  b {
+    font-weight: 600;
+  }
+  small {
+    font-size: 13px;
+    color: #8e8e93;
+  }
+}
+.pd__route-go {
+  flex: none;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: $blue;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  &--done {
+    background: #e3f6ec;
+    color: #1a7f37;
+  }
+}
 .pd__route {
+  gap: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;

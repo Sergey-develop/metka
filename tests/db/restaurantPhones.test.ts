@@ -27,4 +27,13 @@ describe('restaurant phones', () => {
     // the old site of «Трактиръ» no longer exists
     expect(rows.rows.find((r) => r.id === 'zav-traktir')!.website).toBe('https://yamskaya.zavidovo.com/restaurants/')
   })
+
+  it('migration 036: approximate places have a check-in radius of at least 150 m; precise ones keep theirs', async () => {
+    const r = await t.db.query<{ id: string; radius_m: number }>(
+      `select id, radius_m from public.area_places where id in ('zav-bridge', 'zav-beach') order by id`,
+    )
+    expect(Object.fromEntries(r.rows.map((x) => [x.id, x.radius_m]))).toEqual({ 'zav-beach': 120, 'zav-bridge': 150 })
+    const small = await t.db.query(`select id from public.area_places where needs_check and is_active and radius_m < 150`)
+    expect(small.rows).toEqual([])
+  })
 })

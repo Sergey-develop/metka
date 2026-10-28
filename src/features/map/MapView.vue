@@ -298,14 +298,8 @@ const overMap = (path: string) => (/^\/(places|locations)\/|^\/routes\/(?!random
 function selectBuilding(id: string): void {
   if (id.startsWith('place:')) {
     const placeId = id.slice('place:'.length)
-    // a category point opens the place, a quest point its route
-    if (mapCategory.value) {
-      void router.push({ name: 'map-place', params: { id: placeId } })
-      return
-    }
-    const r = quests.routes.find((x) => x.steps.some((s) => s.place?.id === placeId && !s.doneAt)) ??
-      quests.routes.find((x) => x.steps.some((s) => s.place?.id === placeId))
-    void router.push(r ? { name: 'map-route', params: { slug: r.slug } } : '/routes')
+    // a point opens the place's card (the demo: a mark → its card → its quest); the card starts the quest
+    void router.push({ name: 'map-place', params: { id: placeId } })
     return
   }
   outlines.select(null)
