@@ -24,8 +24,11 @@ function inHorizontalScroller(target: EventTarget | null, root: Element): boolea
  * A page is swiped to the right to get back, like iOS: it follows the finger and a long enough drag (or a
  * flick) slides it out, then the page under it shows with no animation of its own. A page lying over the
  * map or the locations list goes back to it (in history when it is the previous page, so it keeps its
- * state); a page of its own goes back in history, else to `fallback`. The page needs touch-action: pan-y:
- * vertical scrolling stays the browser's, which cancels the gesture once it scrolls.
+ * state); a page of its own goes back in history, else to `fallback`.
+ *
+ * Touch events, not pointer events: on iOS a pointer gesture is cancelled as soon as Safari starts to
+ * scroll, and a finger is never perfectly horizontal — the page jerked back. With touch events the
+ * direction is decided after 10px, and from then on the move is ours (preventDefault, no scroll).
  *
  * The page is moved by writing its style once per frame, not through Vue state: a reactive offset
  * re-rendered the whole page on every finger move and made it stutter.
@@ -34,7 +37,7 @@ export function useSwipeBack(fallback = '/locations') {
   const router = useRouter()
   const here = useRoute()
   let el: HTMLElement | null = null
-  let start: { id: number; x: number; y: number; t: number } | null = null
+  let start: { x: number; y: number; t: number } | null = null
   let active = false
   let dx = 0
   let frame = 0
@@ -80,47 +83,53 @@ export function useSwipeBack(fallback = '/locations') {
     }, OUT_MS)
   }
 
+  function end(): boolean {
+    const moved = active
+    start = null
+    active = false
+    dx = 0
+    return moved
+  }
+
   const handlers = {
-    pointerdown(e: PointerEvent): void {
-      if (leaving || e.pointerType === 'mouse' || inHorizontalScroller(e.target, e.currentTarget as Element)) return
+    touchstart(e: TouchEvent): void {
+      const t = e.touches[0]
+      if (leaving || !t || e.touches.length > 1 || inHorizontalScroller(e.target, e.currentTarget as Element)) return
       el = e.currentTarget as HTMLElement
-      start = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now() }
+      start = { x: t.clientX, y: t.clientY, t: performance.now() }
       active = false
       dx = 0
     },
-    pointermove(e: PointerEvent): void {
-      if (!start || e.pointerId !== start.id) return
-      const x = e.clientX - start.x
-      const y = e.clientY - start.y
+    touchmove(e: TouchEvent): void {
+      const t = e.touches[0]
+      if (!start || !t) return
+      const x = t.clientX - start.x
+      const y = t.clientY - start.y
       if (!active) {
-        if (Math.abs(y) > Math.abs(x)) {
-          start = null // a scroll, not ours
+        // decide once the finger has really moved: the first few pixels wobble both ways
+        if (Math.hypot(x, y) < START_PX) return
+        if (Math.abs(y) > Math.abs(x) || x <= 0) {
+          start = null // a scroll (or a swipe to the left): the browser's
           return
         }
-        if (x < START_PX) return
         active = true
-        el?.setPointerCapture?.(e.pointerId)
       }
+      // ours now: the page follows the finger and the browser must not scroll it under the finger (iOS
+      // takes a slightly diagonal move for a scroll and would otherwise break the swipe off)
+      e.preventDefault()
       dx = Math.max(0, x - START_PX) // from where it became a swipe: no jump at the start
       schedule()
     },
-    pointerup(e: PointerEvent): void {
-      if (!start || e.pointerId !== start.id) return
+    touchend(): void {
+      if (!start) return
       const flick = dx / Math.max(1, performance.now() - start.t) > FLICK_PX_PER_MS && dx > START_PX
       const go = active && (dx > LEAVE_PX || flick)
-      const moved = active
-      start = null
-      active = false
-      dx = 0
+      const moved = end()
       if (go) leave()
       else if (moved) settle('back')
     },
-    pointercancel(): void {
-      const moved = active
-      start = null
-      active = false
-      dx = 0
-      if (moved) settle('back')
+    touchcancel(): void {
+      if (end()) settle('back')
     },
   }
 

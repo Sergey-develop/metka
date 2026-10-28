@@ -11,9 +11,9 @@ const Page = defineComponent({
     return () =>
       h('main', {
         class: 'page',
-        onPointerdown: swipe.handlers.pointerdown,
-        onPointermove: swipe.handlers.pointermove,
-        onPointerup: swipe.handlers.pointerup,
+        onTouchstart: swipe.handlers.touchstart,
+        onTouchmove: swipe.handlers.touchmove,
+        onTouchend: swipe.handlers.touchend,
       })
   },
 })
@@ -42,9 +42,13 @@ async function open(parent: '/map' | '/locations' = '/locations') {
   await flushPromises()
   const start = router.currentRoute.value.path
   const main = w.find('main').element as HTMLElement
+  /** a finger on the page: pointerdown/move/up of the old tests map to touchstart/move/end */
+  const TYPE: Record<string, string> = { pointerdown: 'touchstart', pointermove: 'touchmove', pointerup: 'touchend' }
   const at = async (type: string, x: number, y = 300, t = 0) => {
     vi.spyOn(performance, 'now').mockReturnValue(t)
-    await w.find('main').trigger(type, { pointerId: 1, pointerType: 'touch', clientX: x, clientY: y })
+    const touches = type === 'pointerup' ? [] : [{ clientX: x, clientY: y }]
+    main.dispatchEvent(Object.assign(new Event(TYPE[type]!, { bubbles: true, cancelable: true }), { touches }))
+    await flushPromises()
   }
   return { router, main, at, start }
 }
@@ -108,5 +112,19 @@ describe('useSwipeBack', () => {
     await wait(260)
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/map')
+  })
+
+  it('iPhone: a finger that first wobbles down a little and then goes right is still a swipe', async () => {
+    const { router, main, at } = await open()
+    await at('pointerdown', 20, 300, 0)
+    await at('pointermove', 21, 303, 20) // 3px down, 1px right: too little to decide
+    await at('pointermove', 60, 306, 100)
+    await frame()
+    expect(main.style.transform).toBe('translateX(30px)')
+    await at('pointermove', 200, 310, 200)
+    await at('pointerup', 200, 310, 300)
+    await wait(260)
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/locations')
   })
 })
