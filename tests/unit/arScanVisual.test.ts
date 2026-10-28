@@ -5,7 +5,7 @@ import type { GeoFix } from '@/services/geolocation/types'
 import { parseReferenceSet } from '@/services/scan/visualMatch'
 import type { VisualRecognizer } from '@/services/scan/visualRecognizer'
 import { useArScanStore } from '@/stores/arScan'
-import type { BuildingOutline, OutlinesPage } from '@/types/game'
+import type { AreaPlace, AreaQuests, BuildingOutline, OutlinesPage } from '@/types/game'
 import { installFakeServices } from './helpers'
 
 // The scan screen in Zavidovo: a camera frame like a corpus's photos takes the card.
@@ -24,7 +24,7 @@ const recognizer: VisualRecognizer = {
       references: [
         { label: 'Северный', osm: 'way/1', e: [1, 0, 0] },
         { label: 'Восточный', osm: 'way/2', e: [0, 1, 0] },
-        { label: 'Бухта', osm: null, e: [0, 0, 1] },
+        { label: 'Бухта', osm: null, place: 'zav-bay', e: [0, 0, 1] },
       ],
     },
     'https://app.test/r/references.json',
@@ -50,10 +50,21 @@ const rect = (id: number, x0: number, y0: number, x1: number, y1: number): Build
 const NORTH = rect(1, -15, 40, 15, 60)
 const EAST = rect(2, 40, -15, 60, 15)
 
-async function setup() {
+const bay = (lat: number, lng: number): AreaPlace => ({
+  id: 'zav-bay', zone: 'bay', category: 'Природа / вода', name: 'Главная бухта', description: 'Сердце курорта', idea: null,
+  address: null, lat, lng, radiusM: 150, isPartner: false, needsCheck: false, tags: [], openingHours: null, phone: null,
+  website: null, rewardXp: 10, rewardCoins: 0,
+})
+
+async function setup(bayAt: { lat: number; lng: number } | null = null) {
   installFakeServices()
   let emitFix: (f: GeoFix) => void = () => undefined
   const base = services()
+  if (bayAt) {
+    ;(base.api as unknown as Record<string, unknown>).getAreaQuests = async (): Promise<AreaQuests> => ({
+      routes: [], places: [bay(bayAt.lat, bayAt.lng)], visits: [], collections: [],
+    })
+  }
   Object.assign(base.api, {
     getBuildingOutlines: vi.fn(async (): Promise<OutlinesPage> => ({ features: [NORTH, EAST], truncated: false })),
     getBuildingFacts: vi.fn(async () => ({})),
@@ -119,5 +130,24 @@ describe('arScan: recognition by look (Zavidovo)', () => {
     frames.push([0, 1, 0], [0, 1, 0])
     await vi.advanceTimersByTimeAsync(1500 * 2)
     expect(store.selection).toEqual({ id: 1, manual: true })
+  })
+
+  it('the bay seen twice near it opens the place card; a building card later takes its place', async () => {
+    const store = await setup(ORIGIN)
+    frames.push([0, 0, 1], [0, 0, 1])
+    await vi.advanceTimersByTimeAsync(1500 * 2)
+    expect(store.visualPlace?.id).toBe('zav-bay')
+    expect(store.selection.id).toBeNull()
+    store.choose(1)
+    expect(store.visualPlace).toBeNull()
+    store.close()
+    expect(store.visualPlace).toBeNull()
+  })
+
+  it('far from the bay (1 km) the water opens nothing', async () => {
+    const store = await setup({ lat: ORIGIN.lat + 0.009, lng: ORIGIN.lng })
+    frames.push([0, 0, 1], [0, 0, 1], [0, 0, 1])
+    await vi.advanceTimersByTimeAsync(1500 * 3)
+    expect(store.visualPlace).toBeNull()
   })
 })

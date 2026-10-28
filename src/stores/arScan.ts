@@ -8,10 +8,11 @@ import { GeolocationError, type GeoFix } from '@/services/geolocation/types'
 import type { HeadingReading } from '@/services/orientation/types'
 import { rankCandidates, type MatchResult, type ScanHeading } from '@/services/scan/candidates'
 import { SelectionStabilizer, type Selection } from '@/services/scan/stabilizer'
-import { osmKey, referencedBuildings, visualVerdict, type VisualVerdict } from '@/services/scan/visualMatch'
+import { osmKey, referencedBuildings, referencedPlaces, visualVerdict, type VisualVerdict } from '@/services/scan/visualMatch'
 import { loadVisualRecognizer, type VisualRecognizer } from '@/services/scan/visualRecognizer'
-import type { BuildingOutline } from '@/types/game'
+import type { AreaPlace, BuildingOutline } from '@/types/game'
 import { distanceMeters } from '@/utils/geo'
+import { useAreaQuestsStore } from './areaQuests'
 import { useBuildingInfoStore } from './buildingInfo'
 import { gameAreaAt } from '@/utils/gameAreas'
 
@@ -33,6 +34,8 @@ const M_PER_DEG_LAT = 110_540
 const VISUAL_EVERY_MS = 1500
 /** without a compass, buildings this close may be the one in view */
 const VISUAL_NEARBY_M = 150
+/** a place seen by look (the bay) counts this far beyond its radius: water is seen from afar */
+const VISUAL_PLACE_EXTRA_M = 300
 
 /** reference photos + model, loaded once per app run on the first scan in Zavidovo; null — not available */
 let visualPromise: Promise<VisualRecognizer | null> | null = null
@@ -50,7 +53,8 @@ function visualRecognizer(): Promise<VisualRecognizer | null> {
  * anything — the game action goes through the verified /scan/:buildingId flow.
  * In Zavidovo the camera frame is also compared with the owner's photos of the corpuses
  * (services/scan/visualMatch.ts): a building recognised by look twice in a row, among those GPS and
- * the compass put in view, takes the card over the geometric guess.
+ * the compass put in view, takes the card over the geometric guess. A place without a footprint (the
+ * bay) recognised the same way, near it, shows the place's card (`visualPlace`) when no building is open.
  */
 export const useArScanStore = defineStore('arScan', () => {
   const phase = ref<ArScanPhase>('idle')
@@ -82,6 +86,8 @@ export const useArScanStore = defineStore('arScan', () => {
   let visualConfirmed: number | null = null
   /** the last building recognised by look (for diagnostics and the card) */
   const visual = shallowRef<VisualVerdict | null>(null)
+  /** a place recognised by look (the bay): its card, while no building card is open */
+  const visualPlace = shallowRef<AreaPlace | null>(null)
 
   const selectedOutline = computed(() => {
     const id = selection.value.id
@@ -109,7 +115,10 @@ export const useArScanStore = defineStore('arScan', () => {
     const changed = next.id !== selection.value.id || next.manual !== selection.value.manual
     if (!changed) return
     selection.value = next
-    if (next.id !== null) void useBuildingInfoStore().load(next.id)
+    if (next.id !== null) {
+      visualPlace.value = null // a building card takes the place of the bay's
+      void useBuildingInfoStore().load(next.id)
+    }
   }
 
   /**
@@ -139,31 +148,54 @@ export const useArScanStore = defineStore('arScan', () => {
     return new Set(inView.map(osmKey).filter((k) => known.has(k)))
   }
 
+  /** area places with reference photos the player stands near */
+  async function placesNear(fix: GeoFix, known: ReadonlySet<string>): Promise<Map<string, AreaPlace>> {
+    const quests = useAreaQuestsStore()
+    await quests.load() // once per session; a failure leaves no places
+    const near = (quests.data?.places ?? []).filter(
+      (p) => known.has(p.id) && p.lat !== null && p.lng !== null && distanceMeters(fix, { lat: p.lat, lng: p.lng }) <= p.radiusM + VISUAL_PLACE_EXTRA_M,
+    )
+    return new Map(near.map((p) => [p.id, p]))
+  }
+
   async function visualTick(): Promise<void> {
     const fix = position.value
     const result = match.value
     if (phase.value !== 'running' || visualBusy || !video || selection.value.manual) return
     if (!fix || !result || gameAreaAt(fix) !== 'zavidovo') return
     if (visualConfirmed !== null && visualConfirmed === selection.value.id) return
+    if (visualPlace.value && selection.value.id === null) return // the place card is open
     const run = token
     visualBusy = true
     try {
       const recognizer = await visualRecognizer()
       if (!recognizer || run !== token || !video) return
       const allowed = visualAllowed(result, referencedBuildings(recognizer.set))
-      if (allowed.size === 0) {
+      const places = await placesNear(fix, referencedPlaces(recognizer.set))
+      if (run !== token) return
+      if (allowed.size === 0 && places.size === 0) {
         visualStreak = null
         return
       }
       const embedding = await recognizer.embedFrame(video)
       if (!embedding || run !== token || selection.value.manual) return
-      const verdict = visualVerdict(embedding, recognizer.set, allowed)
+      const verdict = visualVerdict(embedding, recognizer.set, allowed, new Set(places.keys()))
       if (!verdict) {
         visualStreak = null
         return
       }
-      visualStreak = visualStreak?.osm === verdict.osm ? { osm: verdict.osm, count: visualStreak.count + 1 } : { osm: verdict.osm, count: 1 }
+      const key = verdict.osm ?? `place:${verdict.place}`
+      visualStreak = visualStreak?.osm === key ? { osm: key, count: visualStreak.count + 1 } : { osm: key, count: 1 }
       if (visualStreak.count < 2) return
+      if (verdict.place !== null) {
+        // a place never replaces an open building card
+        const place = places.get(verdict.place)
+        if (place && selection.value.id === null) {
+          visual.value = verdict
+          visualPlace.value = place
+        }
+        return
+      }
       const outline = outlines.value.find((o) => osmKey(o) === verdict.osm)
       if (!outline) return
       visual.value = verdict
@@ -322,6 +354,7 @@ export const useArScanStore = defineStore('arScan', () => {
     visualStreak = null
     visualConfirmed = null
     visual.value = null
+    visualPlace.value = null
     setSelection(stabilizer.release())
     recompute(true)
   }
@@ -357,6 +390,7 @@ export const useArScanStore = defineStore('arScan', () => {
     visualStreak = null
     visualConfirmed = null
     visual.value = null
+    visualPlace.value = null
     if (outlinesState.value === 'loading') outlinesState.value = outlines.value.length ? 'ready' : 'idle'
     fetchedAt = null
   }
@@ -377,6 +411,7 @@ export const useArScanStore = defineStore('arScan', () => {
     selectedOutline,
     distanceM,
     visual,
+    visualPlace,
     start,
     stop,
     enableCompass,

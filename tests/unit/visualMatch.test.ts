@@ -18,7 +18,7 @@ const RAW = {
     { label: 'Эрбелия', osm: 'way/1', e: norm([1, 0, 0, 0]) },
     { label: 'Эрбелия', osm: 'way/1', e: norm([1, 0.2, 0, 0]) },
     { label: 'Рябина', osm: 'way/2', e: norm([0, 1, 0, 0]) },
-    { label: 'Бухта', osm: null, e: norm([0, 0, 1, 0]) },
+    { label: 'Бухта', osm: null, place: 'zav-bay', e: norm([0, 0, 1, 0]) },
   ],
 }
 const set: VisualReferenceSet = parseReferenceSet(RAW, 'https://app.test/recognition/v1/references.json')
@@ -45,8 +45,12 @@ describe('visual match', () => {
     expect(visualVerdict(frame([1, 1, 1, 3]), set, BOTH)).toBeNull() // like nothing
     expect(visualVerdict(frame([0.8, 1, 0, 0]), set, BOTH)).toBeNull() // between two corpuses (0.78 vs 0.77)
     expect(visualVerdict(frame([1, 0.1, 0, 0]), set, new Set(['way/2']))).toBeNull() // not in view
-    expect(visualVerdict(frame([0.3, 0, 1, 0]), set, BOTH)).toBeNull() // the bay
+    expect(visualVerdict(frame([0.3, 0, 1, 0]), set, BOTH)).toBeNull() // the bay, the player not near it
     expect(visualVerdict(Float32Array.from([1, 0]), set, BOTH)).toBeNull() // another model's vector
+  })
+
+  it('the bay is recognised as its place when the player is near it', () => {
+    expect(visualVerdict(frame([0.3, 0, 1, 0]), set, BOTH, new Set(['zav-bay']))).toMatchObject({ osm: null, place: 'zav-bay', label: 'Бухта' })
   })
 
   it('the stabilizer takes a building recognised by look at once, but never over the player’s choice', () => {

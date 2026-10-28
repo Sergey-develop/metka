@@ -5,6 +5,7 @@ import { services } from '@/app/providers/services'
 import AppButton from '@/components/ui/AppButton.vue'
 import FigureLoader from '@/components/ui/FigureLoader.vue'
 import MemoryEditor from '@/features/album/MemoryEditor.vue'
+import { placePhoto } from '@/features/routes/photos'
 import { MATCH } from '@/services/scan/candidates'
 import { useArScanStore, type ArScanFailure } from '@/stores/arScan'
 import { useBuildingInfoStore } from '@/stores/buildingInfo'
@@ -37,7 +38,7 @@ const status = computed<{ text: string; warn?: boolean } | null>(() => {
   if (scan.outlinesState === 'error')
     return { text: scan.outlinesError?.code === 'offline' ? 'Нет сети' : 'Не удалось загрузить здания', warn: true }
   // the open card is self-explanatory (search is paused until it is closed), as in the mockup
-  if (scan.selection.id !== null) return null
+  if (scan.selection.id !== null || scan.visualPlace) return null
   const m = scan.match
   if (m?.status === 'inaccurate')
     return { text: `Точность GPS ±${Math.round(scan.position?.accuracyM ?? 0)} м — выйдите на открытое место`, warn: true }
@@ -86,6 +87,10 @@ function closeCard(): void {
   scan.close()
 }
 
+function openPlace(id: string): void {
+  void router.push({ name: 'place', params: { id } })
+}
+
 function openScan(gameBuildingId: string): void {
   void router.push({ name: 'scan', params: { buildingId: gameBuildingId } })
 }
@@ -128,7 +133,7 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- tapping the camera view closes the card and resumes the search -->
-    <button v-if="outline" type="button" class="ar__dismiss" aria-label="Закрыть карточку" @click="closeCard" />
+    <button v-if="outline || scan.visualPlace" type="button" class="ar__dismiss" aria-label="Закрыть карточку" @click="closeCard" />
 
     <section v-if="scan.phase === 'failed' && scan.failure" class="ar__failure card" role="alert">
       <p>{{ FAILURES[scan.failure] }}</p>
@@ -156,6 +161,16 @@ onBeforeUnmount(() => {
         @close="closeCard"
       />
 
+      <!-- a place without a footprint recognised by look (the bay) -->
+      <section v-else-if="scan.visualPlace" class="ar__place card" aria-label="Место">
+        <img v-if="placePhoto(scan.visualPlace)" :src="placePhoto(scan.visualPlace)!" alt="" class="ar__place-photo" />
+        <div class="ar__place-body">
+          <p class="ar__place-tag">{{ scan.visualPlace.category }}</p>
+          <h2>{{ scan.visualPlace.name }}</h2>
+          <p class="ar__place-text">{{ scan.visualPlace.description }}</p>
+          <AppButton block @click="openPlace(scan.visualPlace.id)">Открыть место</AppButton>
+        </div>
+      </section>
       <section v-else-if="options.length" class="ar__choice card" aria-label="Выберите здание">
         <h2>Какое здание?</h2>
         <button v-for="o in options" :key="o.outline.id" type="button" class="ar__option" @click="choose(o.outline.id)">
@@ -338,6 +353,36 @@ onBeforeUnmount(() => {
     flex: none;
     color: var(--c-text-2);
   }
+}
+.ar__place {
+  overflow: hidden;
+  h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 6px;
+  }
+}
+.ar__place-photo {
+  display: block;
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+}
+.ar__place-body {
+  padding: 14px;
+}
+.ar__place-tag {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--c-text-2);
+}
+.ar__place-text {
+  margin: 0 0 12px;
+  font-size: 14px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .ar__empty {
   padding: 14px;

@@ -26,11 +26,11 @@ type Ort = typeof import('onnxruntime-web')
 const ort = createRequire(import.meta.url)('onnxruntime-web') as Ort
 ort.env.wasm.numThreads = 1
 
-const labels = JSON.parse(readFileSync('tools/recognition/labels.json', 'utf8')) as Record<string, { osm: string | null; name: string }>
+const labels = JSON.parse(readFileSync('tools/recognition/labels.json', 'utf8')) as Record<string, { osm: string | null; place?: string; name: string }>
 const items = JSON.parse(readFileSync(`${values.tensors}/items.json`, 'utf8')) as { label: string; photo: string; tensor: string }[]
 const session = await ort.InferenceSession.create(readFileSync(values.model))
 
-const refs: { label: string; osm: string | null; e: number[] }[] = []
+const refs: { label: string; osm: string | null; place: string | null; e: number[] }[] = []
 for (const item of items) {
   const meta = labels[item.label]
   if (!meta) throw new Error(`no label «${item.label}» in labels.json`)
@@ -41,7 +41,7 @@ for (const item of items) {
   const dim = hidden.dims[2]!
   const cls = Array.from((hidden.data as Float32Array).subarray(0, dim))
   const norm = Math.hypot(...cls)
-  refs.push({ label: meta.name, osm: meta.osm, e: cls.map((v) => Math.round((v / norm) * 1e5) / 1e5) })
+  refs.push({ label: meta.name, osm: meta.osm, place: meta.place ?? null, e: cls.map((v) => Math.round((v / norm) * 1e5) / 1e5) })
 }
 
 const dot = (a: number[], b: number[]) => a.reduce((s, v, i) => s + v * b[i]!, 0)
@@ -54,13 +54,13 @@ for (const [i, q] of refs.entries()) {
   })
   const [first, second] = [...best.entries()].sort((a, b) => b[1] - a[1])
   const ok = first![1] >= SCORE_THRESHOLD && first![1] - (second?.[1] ?? 0) >= MARGIN_THRESHOLD
-  const target = refs.find((r) => r.label === first![0])!.osm
-  if (ok && target !== null) {
+  const target = refs.find((r) => r.label === first![0])!
+  if (ok && (target.osm !== null || target.place !== null)) {
     if (first![0] === q.label) accepted++
     else wrong++
   }
 }
-console.log(`leave-one-photo-out: ${refs.length} photos, recognised ${accepted}, wrong building ${wrong}`)
+console.log(`leave-one-photo-out: ${refs.length} photos, recognised ${accepted}, wrong building/place ${wrong}`)
 
 mkdirSync(OUT, { recursive: true })
 copyFileSync(values.model, `${OUT}/model.onnx`)
