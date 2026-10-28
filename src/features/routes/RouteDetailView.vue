@@ -636,9 +636,13 @@ $panel: #efeff6;
   margin-top: 14px;
 }
 .info__pair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  // reward and artifact share the row; the reward alone (no artifact) takes it all
+  display: flex;
   gap: 6px;
+  > .info__row {
+    flex: 1;
+    min-width: 0;
+  }
 }
 .info__row {
   display: flex;
