@@ -61,7 +61,6 @@ const status = computed(() => {
     <div class="route__body">
       <span class="route__tag" :class="`r-${place.rarity}`">{{ RARITY[place.rarity] }}</span>
       <h2 class="route__name">{{ place.name }}</h2>
-      <p v-if="place.address" class="route__address">{{ place.address }}</p>
       <p class="route__meta" :class="{ 'route__meta--error': state === 'error', 'route__meta--done': state === 'arrived' }">
         <FilledIcon v-if="state === 'ready'" name="runner" :size="16" />
         <span>{{ status }}</span>
@@ -138,15 +137,6 @@ const status = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.route__address {
-  font-size: 13px;
-  line-height: 15px;
-  color: #85858c;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 .route__meta {
   margin-top: 4px;

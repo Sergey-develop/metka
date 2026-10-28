@@ -13,12 +13,12 @@ function card(over: Partial<InstanceType<typeof RouteCard>['$props']> = {}) {
 }
 
 describe('RouteCard (mockup «карта с меткой»)', () => {
-  it('shows photo, tag, name, address and the walking time; a tap opens the place', async () => {
+  it('shows photo, tag, name (no address) and the walking time; a tap opens the place', async () => {
     const w = card()
     expect(w.find('img').attributes('src')).toBe('https://img.test/z.webp')
     expect(w.find('.route__tag').text()).toBe('Редкое')
     expect(w.find('.route__name').text()).toBe('Завидово')
-    expect(w.find('.route__address').text()).toBe(PLACE.address)
+    expect(w.text()).not.toContain(PLACE.address)
     expect(w.find('.route__meta').text()).toBe('15–20 мин')
     await w.trigger('click')
     expect(w.emitted('open')).toHaveLength(1)

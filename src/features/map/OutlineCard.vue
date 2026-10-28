@@ -14,8 +14,8 @@ const props = defineProps<{
 }>()
 defineEmits<{ close: []; publish: [] }>()
 
-const title = computed(() => props.outline.game?.name ?? props.outline.name ?? props.outline.address ?? 'Здание')
-const address = computed(() => (title.value === props.outline.address ? null : props.outline.address))
+// buildings go by their names only, never by a street address
+const title = computed(() => props.outline.game?.name ?? props.outline.name ?? 'Здание')
 const status = computed(() =>
   props.outline.game?.status === 'unavailable'
     ? { text: 'Временно недоступно для сканирования', cls: 'muted' }
@@ -29,7 +29,6 @@ const status = computed(() =>
       <div>
         <p class="sheet__kind">{{ outline.game ? 'Игровое здание' : 'Здание' }}</p>
         <h2 class="sheet__title">{{ title }}</h2>
-        <p v-if="address" class="sheet__address">{{ address }}</p>
       </div>
       <button class="sheet__close" aria-label="Закрыть" @click="$emit('close')"><AppIcon name="close" :size="16" /></button>
     </header>
@@ -68,11 +67,6 @@ const status = computed(() =>
 .sheet__title {
   font-size: 20px;
   font-weight: 700;
-  margin-top: 2px;
-}
-.sheet__address {
-  color: var(--c-text-2);
-  font-size: 14px;
   margin-top: 2px;
 }
 .sheet__close {

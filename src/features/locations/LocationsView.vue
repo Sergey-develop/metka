@@ -217,7 +217,7 @@ onMounted(() => {
                   <AppIcon name="heart" :size="20" />
                 </button>
                 <h3 class="place__name">{{ b.name }}</h3>
-                <p v-if="b.address ?? tagOf(b)" class="place__meta"><FilledIcon name="pin" :size="16" />{{ b.address ?? tagOf(b) }}</p>
+                <p v-if="tagOf(b)" class="place__meta"><FilledIcon name="pin" :size="16" />{{ tagOf(b) }}</p>
                 <p v-if="walkTime(b)" class="place__meta"><FilledIcon name="runner" :size="16" />{{ walkTime(b) }}</p>
               </li>
             </ul>

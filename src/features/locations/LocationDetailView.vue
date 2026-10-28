@@ -143,7 +143,6 @@ onMounted(loadAll)
           <span class="ld__tag" :class="`r-${building.rarity}`">{{ RARITY[building.rarity] }}</span>
         </div>
         <h1 class="ld__name">{{ building.name }}</h1>
-        <p v-if="building.address" class="ld__meta"><FilledIcon name="pin" :size="18" />{{ building.address }}</p>
         <p v-if="walkTime(distance(building))" class="ld__meta"><FilledIcon name="runner" :size="18" />{{ walkTime(distance(building)) }}</p>
 
         <div v-if="building.description" class="ld__about">

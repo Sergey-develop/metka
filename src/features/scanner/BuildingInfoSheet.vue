@@ -31,13 +31,8 @@ const emit = defineEmits<{
 
 const facts = computed(() => (props.info?.state === 'ready' ? props.info.facts : null))
 const game = computed(() => props.outline.game)
-const title = computed(
-  () => game.value?.name ?? facts.value?.name ?? props.outline.name ?? facts.value?.address ?? props.outline.address ?? 'Здание',
-)
-const address = computed(() => {
-  const a = facts.value?.address ?? props.outline.address
-  return a && a !== title.value ? a : null
-})
+// buildings go by their names only, never by a street address (owner, 2026-10-28)
+const title = computed(() => game.value?.name ?? facts.value?.name ?? props.outline.name ?? 'Здание')
 const description = computed(() => game.value?.description ?? null)
 const dateFmt = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
 
@@ -106,7 +101,6 @@ function orgCountText(n: number): string {
           <AppIcon name="chevron" :size="22" />
         </button>
       </div>
-      <p v-if="address && (expanded || !description)" class="info__address">{{ address }}</p>
     </header>
 
     <div v-if="info?.state === 'loading'" class="info__loading" role="status">
@@ -264,11 +258,6 @@ function orgCountText(n: number): string {
   &--open {
     transform: rotate(90deg);
   }
-}
-.info__address {
-  color: #85858c;
-  font-size: 14px;
-  margin-top: 4px;
 }
 .info__loading {
   display: flex;

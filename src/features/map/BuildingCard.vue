@@ -31,7 +31,6 @@ const status = computed(() => {
       <div>
         <p class="sheet__rarity" :class="`r-${building.rarity}`">{{ RARITY[building.rarity] }}</p>
         <h2 class="sheet__title">{{ building.name }}</h2>
-        <p v-if="building.address" class="sheet__address">{{ building.address }}</p>
       </div>
       <button class="sheet__close" aria-label="Закрыть" @click="$emit('close')"><AppIcon name="close" :size="16" /></button>
     </header>
@@ -68,11 +67,6 @@ const status = computed(() => {
   flex-direction: column;
   gap: 12px;
   animation: rise 0.25s var(--ease);
-}
-.sheet__address {
-  color: var(--c-text-2);
-  font-size: 14px;
-  margin-top: 2px;
 }
 .sheet__head {
   display: flex;

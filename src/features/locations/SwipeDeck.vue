@@ -131,7 +131,7 @@ function swipe(dir: -1 | 1): void {
       </button>
       <div class="card__text">
         <h2>{{ current.name }}</h2>
-        <p v-if="current.description ?? current.address">{{ current.description ?? current.address }}</p>
+        <p v-if="current.description">{{ current.description }}</p>
       </div>
     </article>
   </div>

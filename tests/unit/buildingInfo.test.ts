@@ -169,11 +169,12 @@ function sheet(props: Partial<InstanceType<typeof BuildingInfoSheet>['$props']> 
 }
 
 describe('BuildingInfoSheet', () => {
-  it('compact: kind, title, address; no distance unless given; no invented description', () => {
+  it('compact: kind, title; no street address; no distance unless given; no invented description', () => {
     const w = sheet()
     expect(w.find('.info__kind').text()).toBe('Жилой дом')
-    expect(w.find('.info__title').text()).toBe('Сивашская улица, 4 к1')
-    expect(w.find('.info__address').exists()).toBe(false) // same as the title
+    // buildings go by their names only: no name → «Здание», never the street address
+    expect(w.find('.info__title').text()).toBe('Здание')
+    expect(w.text()).not.toContain('Сивашская')
     expect(w.find('.info__desc').exists()).toBe(false)
     expect(w.find('.info__facts').exists()).toBe(false)
     expect(sheet({ distanceM: 42 }).find('.info__distance').text()).toContain('≈40 м')

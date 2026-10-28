@@ -141,7 +141,6 @@ onBeforeUnmount(() => {
           <div>
             <p class="editor__kind">Воспоминание</p>
             <h2 class="editor__title">{{ place.buildingName }}</h2>
-            <p v-if="place.address" class="editor__address">{{ place.address }}</p>
           </div>
           <button type="button" class="editor__close" aria-label="Закрыть" @click="close">
             <AppIcon name="close" :size="16" />
@@ -281,10 +280,6 @@ onBeforeUnmount(() => {
 .editor__title {
   font-size: 20px;
   font-weight: 700;
-}
-.editor__address {
-  color: var(--c-text-2);
-  font-size: 14px;
 }
 .editor__close {
   flex: none;

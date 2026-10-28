@@ -186,7 +186,7 @@ async function publishOutline(): Promise<void> {
   publishError.value = null
   try {
     const { api } = services()
-    const id = await api.saveGameBuilding(outline.id, { name: (outline.name ?? outline.address ?? 'Здание').slice(0, 160) })
+    const id = await api.saveGameBuilding(outline.id, { name: (outline.name ?? 'Здание').slice(0, 160) })
     await api.setGameBuildingStatus(id, 'published')
     map.invalidate()
     outlines.invalidate()

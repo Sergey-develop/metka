@@ -42,7 +42,7 @@ describe('LocationDetailView', () => {
   it('shows the place with its rewards and the nearest places first', async () => {
     const { w } = await mountView()
     expect(w.find('.ld__name').text()).toBe(BUILDING.name)
-    expect(w.text()).toContain('Красная пл., 3')
+    expect(w.text()).not.toContain('Красная пл., 3') // names only, no street address
     expect(w.text()).toContain('Главный универмаг страны.')
     expect(w.text()).toContain(`+${BUILDING.reward.coins} монет`)
     expect(w.text()).toContain(`+${BUILDING.reward.xp} опыта`)

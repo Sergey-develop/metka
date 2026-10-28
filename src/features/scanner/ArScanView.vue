@@ -68,7 +68,7 @@ const noBuildingsNearby = computed(
 )
 
 function label(o: BuildingOutline): string {
-  return o.game?.name ?? o.name ?? o.address ?? 'Здание без адреса'
+  return o.game?.name ?? o.name ?? 'Здание'
 }
 
 const aimed = computed(() => scan.selection.id !== null && !scan.selection.manual)
