@@ -281,15 +281,36 @@ const canvasBuildings = computed(() => {
   if (mapCategory.value) return categoryPoints.value
   return questPoints.value.length ? [...map.buildingList, ...questPoints.value] : map.buildingList
 })
-// the places are all in Zavidovo: a chip picked elsewhere takes the map there
-watch(mapCategory, (tag) => {
+// a chip shows its places all at once: the map zooms in or out to fit them (they are all in Zavidovo)
+watch(mapCategory, async (tag) => {
   if (!tag) return
-  void quests.load()
   map.select(null)
   outlines.select(null)
-  const v = viewport.value
-  const here = v && gameAreaAt({ lng: (v.bbox.minLng + v.bbox.maxLng) / 2, lat: (v.bbox.minLat + v.bbox.maxLat) / 2 })
-  if (here !== 'zavidovo') canvas.value?.flyTo(ZAVIDOVO_HOME.lng, ZAVIDOVO_HOME.lat, ZAVIDOVO_HOME.zoom)
+  await quests.load()
+  // already loading (the map has just opened): load() returns at once, so wait for the places themselves
+  if (!quests.data && quests.loading) {
+    await new Promise<void>((resolve) => {
+      const stop = watch(
+        () => quests.loading,
+        (loading) => {
+          if (!loading) {
+            stop()
+            resolve()
+          }
+        },
+      )
+    })
+  }
+  if (mapCategory.value !== tag) return // another chip meanwhile
+  const points = categoryPoints.value
+  if (points.length === 0) {
+    canvas.value?.flyTo(ZAVIDOVO_HOME.lng, ZAVIDOVO_HOME.lat, ZAVIDOVO_HOME.zoom)
+    return
+  }
+  const lngs = points.map((p) => p.lng)
+  const lats = points.map((p) => p.lat)
+  // not closer than street level: one place alone is shown with its surroundings
+  canvas.value?.fitArea([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], 16)
 })
 
 /** the page the route card goes back to, opened over the map rather than instead of it ('/places/x' → '/map/places/x') */
