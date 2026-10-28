@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import StateBlock from '@/components/ui/StateBlock.vue'
+import { placePhoto } from '@/features/routes/photos'
+import { useAreaQuestsStore } from '@/stores/areaQuests'
 import { useMemoriesStore } from '@/stores/memories'
+import { usePlaceFavoritesStore } from '@/stores/placeFavorites'
 import type { Memory } from '@/types/game'
 import MemoryEditor from './MemoryEditor.vue'
 import MemorySticker from './MemorySticker.vue'
@@ -12,7 +15,17 @@ const router = useRouter()
 const editing = ref<Memory | null>(null)
 const dateFmt = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
 
-onMounted(() => void memories.load())
+const quests = useAreaQuestsStore()
+const placeFavorites = usePlaceFavoritesStore()
+/** Zavidovo places hearted on their cards (not buildings, so not memories): shown with «Любимые» */
+const favPlaces = computed(() => (quests.data?.places ?? []).filter((p) => placeFavorites.has(p.id)))
+const onlyPlaces = computed(() => memories.favoritesOnly && favPlaces.value.length > 0 && memories.visible.length === 0)
+
+onMounted(() => {
+  void memories.load()
+  void quests.load()
+  void placeFavorites.load(true)
+})
 </script>
 
 <template>
@@ -31,7 +44,27 @@ onMounted(() => void memories.load())
       </button>
     </div>
 
-    <StateBlock v-if="memories.loading && !memories.loaded" kind="loading" title="Загружаем альбом…" />
+    <section v-if="memories.favoritesOnly && favPlaces.length" class="places" aria-label="Любимые места">
+      <h2 class="places__title">Места</h2>
+      <ul class="list">
+        <li v-for="p in favPlaces" :key="p.id">
+          <button class="memory card" @click="router.push({ name: 'place', params: { id: p.id } })">
+            <img v-if="placePhoto(p)" :src="placePhoto(p)!" alt="" class="memory__photo" loading="lazy" />
+            <div class="memory__body">
+              <div class="memory__top">
+                <p class="memory__name">{{ p.name }}</p>
+                <MemorySticker :impression="null" favorite />
+              </div>
+              <p class="memory__date muted">{{ p.category }}</p>
+            </div>
+          </button>
+        </li>
+      </ul>
+      <h2 v-if="!onlyPlaces" class="places__title">Здания</h2>
+    </section>
+
+    <template v-if="onlyPlaces" />
+    <StateBlock v-else-if="memories.loading && !memories.loaded" kind="loading" title="Загружаем альбом…" />
     <StateBlock
       v-else-if="memories.error"
       kind="error"
@@ -85,6 +118,14 @@ onMounted(() => void memories.load())
   padding: 0 6px;
   border: 0;
   background: none;
+}
+.places__title {
+  margin: 4px 0 10px;
+  font-size: 17px;
+  font-weight: 600;
+}
+.places .list {
+  margin-bottom: 20px;
 }
 .filters {
   display: flex;

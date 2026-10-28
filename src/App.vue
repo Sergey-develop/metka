@@ -14,6 +14,7 @@ import { useMapStore } from '@/stores/map'
 import { useRouteStore } from '@/stores/route'
 import { useExplorationStore } from '@/stores/exploration'
 import { useMemoriesStore } from '@/stores/memories'
+import { usePlaceFavoritesStore } from '@/stores/placeFavorites'
 import { useOutlinesStore } from '@/stores/outlines'
 import { useProfileStore } from '@/stores/profile'
 import { useQuestsStore } from '@/stores/quests'
@@ -43,6 +44,7 @@ watch(
       useRouteStore().stop()
       useOutlinesStore().reset()
       useMemoriesStore().reset()
+      usePlaceFavoritesStore().reset()
       void useExplorationStore().reset()
       useCollectionStore().reset()
       useQuestsStore().reset()

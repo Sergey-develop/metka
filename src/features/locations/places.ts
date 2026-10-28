@@ -4,6 +4,7 @@ import { toApiError, type ApiError } from '@/services/api/errors'
 import { useCollectionStore } from '@/stores/collection'
 import { useMapStore } from '@/stores/map'
 import { useMemoriesStore } from '@/stores/memories'
+import { usePlaceFavoritesStore } from '@/stores/placeFavorites'
 import type { MapBuilding } from '@/types/game'
 import { distanceMeters } from '@/utils/geo'
 import { MOSCOW_ENABLED } from '@/utils/gameAreas'
@@ -39,12 +40,7 @@ export const swipeSession = reactive({
  */
 let lastBuildings: MapBuilding[] = []
 
-/**
- * Hearts on the area places (Zavidovo cards, id 'place:<slug>'): they are not buildings, so not in
- * memories (which need the building discovered) but in place_favorites. Kept for the app session.
- */
-const placeFavorites = reactive(new Set<string>())
-let placeFavoritesLoaded = false
+/** Zavidovo cards (id 'place:<slug>'): their hearts are in usePlaceFavoritesStore, not in memories */
 const isAreaPlace = (b: MapBuilding) => b.id.startsWith('place:')
 
 /** Game buildings of Moscow for the locations pages: loading, photo, distance and the favourite heart. */
@@ -52,6 +48,7 @@ export function usePlaces() {
   const map = useMapStore()
   const memories = useMemoriesStore()
   const collection = useCollectionStore()
+  const placeFavorites = usePlaceFavoritesStore()
 
   const buildings = ref<MapBuilding[]>(lastBuildings)
   const loading = ref(MOSCOW_ENABLED && lastBuildings.length === 0)
@@ -118,30 +115,11 @@ export function usePlaces() {
   }
 
   async function togglePlaceFavorite(b: MapBuilding): Promise<void> {
-    const on = !placeFavorites.has(b.slug)
     favBusy.value = b.id
-    // at once on the card; back as it was when the server refuses
-    if (on) placeFavorites.add(b.slug)
-    else placeFavorites.delete(b.slug)
     try {
-      await services().api.setPlaceFavorite(b.slug, on)
-    } catch {
-      if (on) placeFavorites.delete(b.slug)
-      else placeFavorites.add(b.slug)
+      await placeFavorites.toggle(b.slug)
     } finally {
       favBusy.value = null
-    }
-  }
-
-  async function loadPlaceFavorites(): Promise<void> {
-    if (placeFavoritesLoaded) return
-    try {
-      const ids = await services().api.getPlaceFavorites()
-      placeFavorites.clear()
-      for (const id of ids) placeFavorites.add(id)
-      placeFavoritesLoaded = true
-    } catch {
-      // the hearts stay empty; the next visit to the list tries again
     }
   }
 
@@ -149,7 +127,7 @@ export function usePlaces() {
     void load()
     void memories.load()
     void collection.load()
-    void loadPlaceFavorites()
+    void placeFavorites.load()
   }
 
   return { buildings, loading, error, load, loadAll, distance, photo, isFavorite, canFavorite, favBusy, toggleFavorite }
