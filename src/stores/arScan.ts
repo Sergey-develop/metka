@@ -8,6 +8,8 @@ import { GeolocationError, type GeoFix } from '@/services/geolocation/types'
 import type { HeadingReading } from '@/services/orientation/types'
 import { rankCandidates, type MatchResult, type ScanHeading } from '@/services/scan/candidates'
 import { SelectionStabilizer, type Selection } from '@/services/scan/stabilizer'
+import { osmKey, referencedBuildings, visualVerdict, type VisualVerdict } from '@/services/scan/visualMatch'
+import { loadVisualRecognizer, type VisualRecognizer } from '@/services/scan/visualRecognizer'
 import type { BuildingOutline } from '@/types/game'
 import { distanceMeters } from '@/utils/geo'
 import { useBuildingInfoStore } from './buildingInfo'
@@ -27,11 +29,28 @@ const DISTANCE_MAX_ACCURACY_M = 20
 const RECOMPUTE_MS = 200
 const HEADING_SMOOTHING = 0.3
 const M_PER_DEG_LAT = 110_540
+/** a camera frame is compared with the reference photos this often (inference blocks ≈0.25–0.6 s) */
+const VISUAL_EVERY_MS = 1500
+/** without a compass, buildings this close may be the one in view */
+const VISUAL_NEARBY_M = 150
+
+/** reference photos + model, loaded once per app run on the first scan in Zavidovo; null — not available */
+let visualPromise: Promise<VisualRecognizer | null> | null = null
+function visualRecognizer(): Promise<VisualRecognizer | null> {
+  visualPromise ??= loadVisualRecognizer().catch((e: unknown) => {
+    console.warn('visual recognition unavailable', e)
+    return null
+  })
+  return visualPromise
+}
 
 /**
  * Camera-first scan screen (/scan): which building is in front of the camera, by GPS + compass +
  * OSM footprints. Approximate by design (see services/scan/candidates.ts); it never unlocks
  * anything — the game action goes through the verified /scan/:buildingId flow.
+ * In Zavidovo the camera frame is also compared with the owner's photos of the corpuses
+ * (services/scan/visualMatch.ts): a building recognised by look twice in a row, among those GPS and
+ * the compass put in view, takes the card over the geometric guess.
  */
 export const useArScanStore = defineStore('arScan', () => {
   const phase = ref<ArScanPhase>('idle')
@@ -55,6 +74,14 @@ export const useArScanStore = defineStore('arScan', () => {
   let fetchedAt: GeoFix | null = null
   let lastCompute = 0
   let smooth: { x: number; y: number } | null = null
+  let video: HTMLVideoElement | null = null
+  let visualTimer: ReturnType<typeof setInterval> | null = null
+  let visualBusy = false
+  let visualStreak: { osm: string; count: number } | null = null
+  /** the selection the frame has confirmed: no more inference until it changes */
+  let visualConfirmed: number | null = null
+  /** the last building recognised by look (for diagnostics and the card) */
+  const visual = shallowRef<VisualVerdict | null>(null)
 
   const selectedOutline = computed(() => {
     const id = selection.value.id
@@ -102,6 +129,52 @@ export const useArScanStore = defineStore('arScan', () => {
 
   /** the player stands outside every game area (e.g. in Moscow with Moscow off): no buildings to scan */
   const outsideGame = computed(() => !!position.value && !gameAreaAt(position.value))
+
+  /** buildings that may be in view: the compass's candidates, or (no compass) the ones close by */
+  function visualAllowed(result: MatchResult, known: ReadonlySet<string>): Set<string> {
+    const inView =
+      result.candidates.length > 0
+        ? result.candidates.map((c) => c.outline)
+        : result.nearby.filter((n) => n.distanceM <= VISUAL_NEARBY_M).map((n) => n.outline)
+    return new Set(inView.map(osmKey).filter((k) => known.has(k)))
+  }
+
+  async function visualTick(): Promise<void> {
+    const fix = position.value
+    const result = match.value
+    if (phase.value !== 'running' || visualBusy || !video || selection.value.manual) return
+    if (!fix || !result || gameAreaAt(fix) !== 'zavidovo') return
+    if (visualConfirmed !== null && visualConfirmed === selection.value.id) return
+    const run = token
+    visualBusy = true
+    try {
+      const recognizer = await visualRecognizer()
+      if (!recognizer || run !== token || !video) return
+      const allowed = visualAllowed(result, referencedBuildings(recognizer.set))
+      if (allowed.size === 0) {
+        visualStreak = null
+        return
+      }
+      const embedding = await recognizer.embedFrame(video)
+      if (!embedding || run !== token || selection.value.manual) return
+      const verdict = visualVerdict(embedding, recognizer.set, allowed)
+      if (!verdict) {
+        visualStreak = null
+        return
+      }
+      visualStreak = visualStreak?.osm === verdict.osm ? { osm: verdict.osm, count: visualStreak.count + 1 } : { osm: verdict.osm, count: 1 }
+      if (visualStreak.count < 2) return
+      const outline = outlines.value.find((o) => osmKey(o) === verdict.osm)
+      if (!outline) return
+      visual.value = verdict
+      visualConfirmed = outline.id
+      if (selection.value.id !== outline.id) setSelection(stabilizer.adopt(outline.id))
+    } catch (e) {
+      console.warn('visual recognition failed', e)
+    } finally {
+      visualBusy = false
+    }
+  }
 
   async function fetchOutlines(fix: GeoFix): Promise<void> {
     fetchController?.abort()
@@ -200,7 +273,7 @@ export const useArScanStore = defineStore('arScan', () => {
     await startHeading()
   }
 
-  async function start(video: HTMLVideoElement): Promise<void> {
+  async function start(videoEl: HTMLVideoElement): Promise<void> {
     stop()
     const run = ++token
     phase.value = 'starting'
@@ -208,9 +281,10 @@ export const useArScanStore = defineStore('arScan', () => {
     const { cameraPreview, geolocation } = services()
 
     try {
-      const handle = await cameraPreview.start(video)
+      const handle = await cameraPreview.start(videoEl)
       if (run !== token) return handle.stop()
       camera = handle
+      video = videoEl
     } catch (e) {
       if (run !== token) return
       const code = e instanceof CameraError ? e.code : 'failed'
@@ -231,6 +305,7 @@ export const useArScanStore = defineStore('arScan', () => {
     }
 
     phase.value = 'running'
+    visualTimer = setInterval(() => void visualTick(), VISUAL_EVERY_MS)
     await startHeading()
   }
 
@@ -244,6 +319,9 @@ export const useArScanStore = defineStore('arScan', () => {
 
   /** the player closed the card: detection resumes from scratch */
   function close(): void {
+    visualStreak = null
+    visualConfirmed = null
+    visual.value = null
     setSelection(stabilizer.release())
     recompute(true)
   }
@@ -253,6 +331,9 @@ export const useArScanStore = defineStore('arScan', () => {
     token++
     camera?.stop()
     camera = null
+    video = null
+    if (visualTimer) clearInterval(visualTimer)
+    visualTimer = null
     stopGeo?.()
     stopGeo = null
     stopHeading?.()
@@ -273,6 +354,9 @@ export const useArScanStore = defineStore('arScan', () => {
     match.value = null
     stabilizer = new SelectionStabilizer()
     selection.value = { id: null, manual: false }
+    visualStreak = null
+    visualConfirmed = null
+    visual.value = null
     if (outlinesState.value === 'loading') outlinesState.value = outlines.value.length ? 'ready' : 'idle'
     fetchedAt = null
   }
@@ -292,6 +376,7 @@ export const useArScanStore = defineStore('arScan', () => {
     selection,
     selectedOutline,
     distanceM,
+    visual,
     start,
     stop,
     enableCompass,

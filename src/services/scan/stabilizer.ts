@@ -68,6 +68,15 @@ export class SelectionStabilizer {
     return this.current
   }
 
+  /** recognised by look (the camera frame): shown at once, still automatic — the player's choice wins */
+  adopt(id: number): Selection {
+    if (this.manual) return this.current
+    this.selected = id
+    this.pendingId = null
+    this.lostSince = null
+    return this.current
+  }
+
   /** back to automatic selection */
   release(): Selection {
     this.manual = false

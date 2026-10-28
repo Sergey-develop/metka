@@ -19,7 +19,8 @@
     "osm:import": "node --experimental-strip-types tools/osm-import/import.ts",
     "osm:publish": "node --experimental-strip-types tools/osm-import/publish.ts",
     "osm:fetch-pois": "node --experimental-strip-types tools/osm-import/fetch-pois.ts",
-    "osm:import-pois": "node --experimental-strip-types tools/osm-import/import-pois.ts"
+    "osm:import-pois": "node --experimental-strip-types tools/osm-import/import-pois.ts",
+    "recognition:build": "node --experimental-strip-types tools/recognition/build-references.ts"
   },
   "dependencies": {
     "@capacitor-community/background-geolocation": "1.2.26",
