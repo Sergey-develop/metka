@@ -36,4 +36,11 @@ describe('restaurant phones', () => {
     const small = await t.db.query(`select id from public.area_places where needs_check and is_active and radius_m < 150`)
     expect(small.rows).toEqual([])
   })
+
+  it('migration 037: the forest route’s artifact «Голос леса» is in the collection «Голоса леса»', async () => {
+    const r = await t.db.query<{ collection_id: string; title: string }>(
+      `select a.collection_id, c.title from public.artifacts a join public.artifact_collections c on c.id = a.collection_id where a.id = 'forest-voice'`,
+    )
+    expect(r.rows[0]).toEqual({ collection_id: 'zav-forest-voices', title: 'Голоса леса' })
+  })
 })
