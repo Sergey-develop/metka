@@ -77,6 +77,14 @@ const MAP_AREA: LngLatBounds = MOSCOW_ENABLED
     ]
 const MIN_ZOOM = MOSCOW_ENABLED ? 9.5 : 11.5
 /**
+ * What the fog covers. With Moscow the game areas themselves (seen from afar the okrugs are the map).
+ * Zavidovo alone: well past everything the map can show (MAP_AREA ± 0.5°), so zooming out never shows
+ * the fog's edge as a square on the basemap; explored cells are its holes as before.
+ */
+const FOG_AREAS: readonly FogArea[] = MOSCOW_ENABLED
+  ? GAME_AREAS
+  : [[MAP_AREA[0][0] - 0.5, MAP_AREA[0][1] - 0.5, MAP_AREA[1][0] + 0.5, MAP_AREA[1][1] + 0.5]]
+/**
  * Explored cells live in their own layer above the basemap and below our features layer (1500),
  * so district fog, footprints and DOM markers stay on top. Yandex draws basemap labels and icons
  * above all vector layers, so street names stay readable over the fill (checked in Chrome).
@@ -692,7 +700,7 @@ export class YandexMapService implements MapService {
     // one fog polygon set per game area (they do not overlap)
     const fog: GeoJSON.MultiPolygon = {
       type: 'MultiPolygon',
-      coordinates: GAME_AREAS.flatMap((area) => fogGeometry(scene.exploredCells, area, { smooth: true }).coordinates),
+      coordinates: FOG_AREAS.flatMap((area) => fogGeometry(scene.exploredCells, area, { smooth: true }).coordinates),
     } as GeoJSON.MultiPolygon
     const geometry = toYandexGeometry(fog)
     const borders = fogBorders(fog)
