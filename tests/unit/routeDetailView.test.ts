@@ -236,6 +236,8 @@ describe('PlaceDetailView', () => {
     // a restaurant with a phone: «Забронировать» calls it
     expect(w.find('.pd__book').text()).toBe('Забронировать')
     expect(w.find('.pd__book').attributes('href')).toBe('tel:+79038067997')
+    // both actions in the bar at the bottom: «Забронировать» first, «Как дойти» next to it
+    expect(w.findAll('.pd__cta > *').map((b) => b.text())).toEqual(['Забронировать', 'Как дойти'])
 
     const bay = await mountAt('/places/zav-bay', PlaceDetailView, { id: 'zav-bay' })
     expect(bay.w.find('.pd__route').text()).toContain('Завидово: поймай волну')

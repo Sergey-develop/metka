@@ -97,16 +97,6 @@ onMounted(() => void quests.load())
       <p class="pd__text">{{ place.description }}</p>
       <p v-if="place.needsCheck" class="pd__check">Точка на карте примерная — уточняется на месте.</p>
 
-      <!-- a restaurant with a phone: «Забронировать» calls it -->
-      <a v-if="badges?.kind === 'food' && place.phone" class="pd__primary pd__book" :href="tel(place.phone)">
-        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
-          <path
-            fill="currentColor"
-            d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1L6.6 10.8Z"
-          />
-        </svg>
-        Забронировать
-      </a>
 
       <dl class="pd__info">
         <template v-if="place.address">
@@ -156,7 +146,22 @@ onMounted(() => void quests.load())
         </RouterLink>
       </section>
 
-      <button v-if="hasPoint(place)" class="pd__primary" @click="walkTo"><FilledIcon name="pin" :size="20" />Как дойти</button>
+      <!-- the actions stay at the bottom, over the tab bar, while the page scrolls (as on a building's page) -->
+      <div v-if="(badges?.kind === 'food' && place.phone) || hasPoint(place)" class="pd__cta">
+        <!-- a restaurant with a phone: «Забронировать» calls it -->
+        <a v-if="badges?.kind === 'food' && place.phone" class="pd__primary pd__book" :href="tel(place.phone)">
+          <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1L6.6 10.8Z"
+            />
+          </svg>
+          Забронировать
+        </a>
+        <button v-if="hasPoint(place)" class="pd__primary" :class="{ 'pd__primary--soft': badges?.kind === 'food' && place.phone }" @click="walkTo">
+          <FilledIcon name="pin" :size="20" />Как дойти
+        </button>
+      </div>
     </template>
   </main>
 </template>
@@ -368,8 +373,26 @@ $card: #f3f3f9;
   font-size: 15px;
   text-decoration: none;
 }
+.pd__cta {
+  position: sticky;
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + 12px);
+  z-index: 5;
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+  .pd__primary {
+    flex: 1;
+    margin-top: 0;
+    box-shadow: 0 6px 18px rgb(1 70 140 / 18%);
+  }
+}
 .pd__book {
   text-decoration: none;
+}
+// next to «Забронировать»: the second action is lighter
+.pd__primary.pd__primary--soft {
+  background: #dcecfc;
+  color: $blue;
 }
 .pd__primary {
   width: 100%;
